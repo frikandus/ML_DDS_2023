@@ -1,0 +1,117 @@
+---
+title: "Práctica Final Data Driven Security"
+author: "Grup CC: Toni Jordan Y Joan Dalmau"
+date: "1 de Junio de 2023"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 4
+    theme: yeti
+  html_notebook:
+    number_sections: yes
+    theme: spacelab
+    toc: yes
+    toc_float: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(fig.align = 'center')
+
+library(randomForest)
+library(readr)
+library(caret)
+library(e1071)
+library(dplyr)
+library(ggplot2)
+```
+
+## Carga del dataset
+```{r read_data}
+data_full <- read_csv("Book1.csv",
+                  col_types = cols(SrcBytes = col_integer(),
+                                   DstBytes = col_integer(), Land = col_integer(),
+                                   WrongFragment = col_integer(), Urgent = col_number(),
+                                   Hot = col_number(), NumFailedLogin = col_integer()))
+data <- read.csv("Book2.csv",header=T)
+```
+
+## Validación del Dataset de muestras
+
+Se valida que el Dataset parcial tiene las muestra suficientes para mantener las mismas proporciones que el Dataset global
+
+```{r verify_data}
+# Calcula estadísticas descriptivas para el conjunto de datos completo
+full_data_attack_dist <- data_full %>% group_by(Attack) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# Calcula estadísticas descriptivas para la muestra extraída
+sample_attack_dist <- data %>% group_by(Attack) %>%
+  summarise(Count = n()) %>%
+  mutate(Percentage = Count / sum(Count) * 100)
+
+# Combina las distribuciones en una tabla comparativa
+comparison_table <- full_data_attack_dist %>%
+  full_join(sample_attack_dist, by = "Attack", suffix = c("_FullData", "_Sample")) %>%
+  mutate(Difference = abs(Percentage_FullData - Percentage_Sample),
+         SignificantlyDifferent = ifelse(Difference > 5, "Yes", "No"))
+
+# Filtra los valores con diferencias relevantes
+relevant_differences <- comparison_table %>% filter(Difference > 5)
+
+# Crea un gráfico de barras comparativo con resaltado para valores significativamente diferentes
+comparison_plot <- ggplot(comparison_table, aes(x = Attack)) +
+  geom_bar(aes(y = Percentage_FullData, fill = SignificantlyDifferent), stat = "identity", alpha = 0.5) +
+  geom_bar(aes(y = Percentage_Sample), stat = "identity", fill = "red", alpha = 0.5) +
+  labs(x = "Attack", y = "Percentage") +
+  scale_y_continuous(labels = scales::percent_format()) +
+  ggtitle("Comparativa de Distribución de Ataques") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Yes" = "yellow", "No" = "blue"))
+
+# Crea un gráfico de barras comparativo solo para las diferencias relevantes
+comparison_plot3 <- ggplot(relevant_differences, aes(x = Attack, y = Difference)) +
+  geom_bar(stat = "identity", fill = "blue", alpha = 0.5) +
+  labs(x = "Attack", y = "Difference") +
+  ggtitle("Comparativa de Distribución de Ataques") +
+  theme_minimal()
+
+# Imprime la tabla comparativa
+print(comparison_table)
+print(comparison_plot)
+print(comparison_plot3)
+```
+
+```{r study_dataset}
+# Calcula el número total de casos por cada valor de "Attack"
+attack_totals <- sort(table(data$Attack), decreasing = TRUE)
+# Elimina el valor "normal" de la tabla de totales del dataset completo
+attack_totals <- attack_totals[attack_totals != attack_totals["normal."]]
+
+# Crea una tabla ordenada con los totales
+attack_table <- data.frame(Attack = names(attack_totals), Total = as.numeric(attack_totals))
+attack_table <- attack_table[order(attack_table$Total, decreasing = TRUE), ]
+
+# Imprime la tabla ordenada
+print(attack_table)
+```
+Count numeric and char variables.
+```{r study 2 dataset}
+numericVars <- which(sapply(data, is.numeric)) 
+numericVarNames <- names(numericVars) 
+cat('There are', length(numericVars), 'numeric variables')
+#Charcol <- names(data[,sapply(data, is.factor)])
+#cat('There are', length(Charcol), 'remaining columns with factor values')
+
+# Crear una tabla para almacenar la información del tipo de variables
+tipo_variables <- data.frame(Columna = names(data), Tipo = sapply(data, class), stringsAsFactors = FALSE)
+
+# Mostrar la tabla de tipos de variables y validar categoricas
+print(tipo_variables)
+```
+
+
