@@ -28,6 +28,7 @@ library(caret)
 library(e1071)  #Naive Bayes
 library(dplyr)
 library(ggplot2)
+library(doParallel)
 ```
 
 ## Carga del dataset
@@ -296,6 +297,9 @@ set.seed(123)
 
 indep_var = colnames(training_num) != "Attack"
 
+cl = makePSOCKcluster(5)  #incia paralelismo
+registerDoParallel(cl)
+
 # CART (Classification and Regression Trees) OK
 start_time <- Sys.time()
 fit.cart <- train(Attack ~ ., data=training, method="rpart", metric=metric, trControl=control)
@@ -355,6 +359,8 @@ results <- data.frame(Modelo = c("Random Forest", "Support Vector Machine", "Red
 print(results)
 
 cm <- confusionMatrix(rf_pred, testing$Attack)
+
+stopImplicitCluster(cl)
 #results1 <- resamples(list(CART=fit.cart, SVM=fit.svm))
 #summary(results)
 ```
