@@ -31,7 +31,7 @@ library(ggplot2)
 library(doParallel)
 ```
 
-## Carga del dataset
+# Carga del dataset
 ```{r read_data}
 data_full <- read_csv("Book1.csv",
                   col_types = cols(SrcBytes = col_integer(),
@@ -41,7 +41,7 @@ data_full <- read_csv("Book1.csv",
 data <- read.csv("Book2.csv",header=T)
 ```
 
-## Validación del Dataset de muestras
+# Validación del Dataset de muestras
 
 Se valida que el Dataset parcial tiene las muestra suficientes para mantener las mismas proporciones que el Dataset global
 
@@ -101,7 +101,8 @@ attack_table <- attack_table[order(attack_table$Total, decreasing = TRUE), ]
 # Imprime la tabla ordenada
 print(attack_table)
 ```
-Count numeric and char variables.
+
+# Count numeric and char variables.
 ```{r study 2 dataset}
 numericVars <- which(sapply(data, is.numeric)) 
 numericVarNames <- names(numericVars) 
@@ -116,8 +117,8 @@ tipo_variables <- data.frame(Columna = names(data), Tipo = sapply(data, class), 
 print(tipo_variables)
 ```
 
-```{r select-processing, echo=TRUE}
 # Explore categorical features
+```{r select-processing, echo=TRUE}
 #cat_cols <- c("ProtocolType", "Service", "Flag", "Label")
 
 # Print categories in each feature
@@ -133,55 +134,58 @@ cat("\nDistribución de categorias en Service:\n")
 cat(sort(table(data$Service), decreasing = TRUE)[1:5], "\n")
 ```
 
-Esta sección es para completar el estudio de los datos y sus relaciones
+# EDA: Esta sección es para completar el estudio de los datos y sus relaciones
 
-# EDA
+Categorias principales de intrusiones:
+
+DOS: denial-of-service, e.g. syn flood;
+R2L: unauthorized access from a remote machine, e.g. guessing password;
+U2R: unauthorized access to local superuser (root) privileges, e.g., various ``buffer overflow'' attacks;
+probing: surveillance and other probing, e.g., port scanning.
+
+# Observación: DstHostSameSrcPortRate tiene un ligero efecto en el tipo de intrusión, para "DstHostSameSrcPortRate" mayor a igual a 1 puede ser "probe" de "r2l"
 ```{r eda1, echo=TRUE}
-# Observation: dst_host_same_src_port_rate has slight effect on the intrusion type.
-# for "dst_host_same_src_port_rate" value greater than equal to 1 it can be "probe" and "r2l""
 qplot(DstHostSameSrvRate,DstHostSrvCount,colour=Attack,data=data)
 ```
 
+# Observatioó: "Flag" es un buen predictor. Flag= "REG" y "S0" es tipo "DoS"
 ```{r eda2, echo=TRUE}
-# Observation: "flag" is a strong predictor. for flag= "REG" and "S0" it is "dos"
 qplot(Service,Flag,colour=Attack,data=data)
 ```
 
+# Observación: Para duración mayor hay de 30000 se puede ver un 'probe', la duración misma es un fuerte predictor
 ```{r eda3, echo=TRUE}
-# Observation: For duration Greater than 30000 we can see it's 'probe'
-# Therefore duration itself is a strong predictor
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
+# Observación: Para duración mayor 30000 puede ser un 'probe'
+# Observación: ProtocolType "tcp" tiene "DOS" tipo de intrusion. Es un fuerte predictor del tipo "DoS".
 ```{r eda4, echo=TRUE}
-# Observation: For duration Greater than 30000 we can see it's 'probe'
-# Observation: protocol-type "tcp" has "DOS" intrusion type. It is also a strong predictor of "dos" type.
 qplot(Service,ProtocolType,colour=Attack,data=data)
 ```
 
+# Observación: No hay una clara identificación
 ```{r eda5, echo=TRUE}
-# Observation: No such clear identification
 qplot(Flag,Land,colour=Attack,data=data)
 ```
 
+# Observación: Para SerrorRate y SrvSerrorRate=0 or 1 es tipo "Dos" y SerrorRate entre 0.25 a 0.5 es un "probe""
 ```{r eda6, echo=TRUE}
-# Observation: For serror_rate and srv_serror_rate=0 or 1 its "dos" and
-# serror_rate between 0.25 to 0.5 its "probe""
 qplot(SerrorRate,SrvSerrorRate,colour=Attack,data=data)
 ```
 
+# Observación: para duración mayor de 30000 puede ser un 'probe'
 ```{r eda7, echo=TRUE}
-# Observation:For duration Greater than 30000 we can see it's 'probe'
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
+# Resultado: claramente Flag is un potente predictor para incrusiones de tipo "DoS"
 ```{r eda8, echo=TRUE}
-# Result: We can clearly see flag is a strong predictor for "dos" type intrusion
 A=table(data$Flag,data$Attack)
 round(prop.table(A)*100,1)
 ```
 
-Seción de carga de los diferentes modelos de subset por variables
+# Sección de carga de los diferentes modelos de subset por variables
 ```{r feature_selection, echo=FALSE}
 #original
 data1_original <- data[,c("SrcBytes", "DstBytes", "Land", "WrongFragment", "Urgent", "SameSrvRate", "LoggedIn",  "DstHostSameSrvRate", "DstHostSrvCount","Flag","Attack" )]
@@ -254,8 +258,9 @@ valid$Attack <- as.character(valid$Attack)
 valid$pred <- as.character(pred)
 valid$match <- valid$Attack == valid$pred
 
+# Calcular eficacia
 df <- table(valid$match)
-ok <- df[2]/(df[1]+df[2])*100
+ok <- sum(valid$match) / nrow(valid) * 100
 
 valid_ori <- testing_original
 valid_ori$Attack <- as.character(valid_ori$Attack)
@@ -263,7 +268,8 @@ valid_ori$pred <- as.character(pred_ori)
 valid_ori$match <- valid_ori$Attack == valid_ori$pred
 
 df_ori <- table(valid_ori$match)
-ok_ori <- df_ori[2]/(df_ori[1]+df_ori[2])*100
+ok_ori <- sum(valid_ori$match) / nrow(valid_ori) * 100
+#ok_ori <- df_ori[2]/(df_ori[1]+df_ori[2])*100
 
 valid_pdf <- testing_pdf
 valid_pdf$Attack <- as.character(valid_pdf$Attack)
@@ -271,7 +277,8 @@ valid_pdf$pred <- as.character(pred_pdf)
 valid_pdf$match <- valid_pdf$Attack == valid_pdf$pred
 
 df_pdf <- table(valid_pdf$match)
-ok_pdf <- df_pdf[2]/(df_pdf[1]+df_pdf[2])*100
+ok_pdf <- sum(valid_pdf$match) / nrow(valid_pdf) * 100
+#ok_pdf <- df_pdf[2]/(df_pdf[1]+df_pdf[2])*100
 
 valid_teo <- testing_teorico
 valid_teo$Attack <- as.character(valid_teo$Attack)
@@ -279,16 +286,26 @@ valid_teo$pred <- as.character(pred_teo)
 valid_teo$match <- valid_teo$Attack == valid_teo$pred
 
 df_teo <- table(valid_teo$match)
-ok_teo <- df_teo[2]/(df_teo[1]+df_teo[2])*100
+ok_teo <- sum(valid_teo$match) / nrow(valid_teo) * 100
+#ok_teo <- df_teo[2]/(df_teo[1]+df_teo[2])*100
 
 tabla_resultados <- data.frame(Variable = c("Propuesto", "Enunciado", "Ejemplo_PDF", "Teórico"),
                               Valor = c(ok, ok_ori, ok_pdf, ok_teo))
 print(tabla_resultados)
 summary(tabla_resultados)
+
+cm_rf <- confusionMatrix(pred, testing$Attack)
+cm_ori <- confusionMatrix(pred_ori, testing_original$Attack)
+cm_pdf <- confusionMatrix(pred_pdf, testing_pdf$Attack)
+cm_teo <- confusionMatrix(pred_teo, testing_teorico$Attack)
+heatmap(cm_rf$table)
+heatmap(cm_ori$table)
+heatmap(cm_pdf$table)
+heatmap(cm_teo$table)
 ```
 
-```{r other_tests, echo=FALSE}
 # Me quedo con las variables numéricas
+```{r other_tests, echo=FALSE}
 num_vars = sapply(training, is.numeric)
 training_num = training[, num_vars]
 control <- trainControl(method="cv", number=2)
@@ -358,7 +375,8 @@ results <- data.frame(Modelo = c("Random Forest", "Support Vector Machine", "Red
                       Tiempo =c(elapsed_time_rf, elapsed_time_svm, elapsed_time_nn, elapsed_time_cart, elapsed_time_svm1, elapsed_time_nb))
 print(results)
 
-cm <- confusionMatrix(rf_pred, testing$Attack)
+cm_rf <- confusionMatrix(rf_pred, testing$Attack)
+heatmap(cm_rf$table)
 
 stopImplicitCluster(cl)
 #results1 <- resamples(list(CART=fit.cart, SVM=fit.svm))
