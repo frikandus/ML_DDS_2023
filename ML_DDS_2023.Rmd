@@ -22,9 +22,10 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(fig.align = 'center')
 
 library(randomForest)
+library(nnet)
 library(readr)
 library(caret)
-library(e1071)
+library(e1071)  #Naive Bayes
 library(dplyr)
 library(ggplot2)
 ```
@@ -238,6 +239,7 @@ output.forest_teo <- randomForest(Attack ~ ., data = training_teorico, na.action
 
 ```{r predict, echo=FALSE}
 pred <- predict(output.forest,testing)
+rf_accuracy <- sum(pred == testing$Attack) / length(pred)
 #str(pred)
 
 pred_ori <- predict(output.forest_ori,testing_original)
@@ -282,6 +284,79 @@ tabla_resultados <- data.frame(Variable = c("Propuesto", "Enunciado", "Ejemplo_P
                               Valor = c(ok, ok_ori, ok_pdf, ok_teo))
 print(tabla_resultados)
 summary(tabla_resultados)
+```
+
+```{r other_tests, echo=FALSE}
+# Me quedo con las variables numéricas
+num_vars = sapply(training, is.numeric)
+training_num = training[, num_vars]
+control <- trainControl(method="cv", number=2)
+metric <- "Accuracy"
+set.seed(123)
+
+indep_var = colnames(training_num) != "Attack"
+
+# CART (Classification and Regression Trees) OK
+start_time <- Sys.time()
+fit.cart <- train(Attack ~ ., data=training, method="rpart", metric=metric, trControl=control)
+end_time <- Sys.time()
+elapsed_time_cart <- end_time - start_time
+
+cart_pred <- predict(fit.cart, testing)
+cart_accuracy <- sum(cart_pred == testing$Attack) / length(cart_pred)
+
+# SVM Support Vector Machine OK
+start_time <- Sys.time()
+fit.svm <- train(Attack ~ ., data=training, method="svmRadial", metric=metric, trControl=control)
+end_time <- Sys.time()
+elapsed_time_svm1 <- end_time - start_time
+svm1_pred <- predict(fit.svm, testing)
+svm1_accuracy <- sum(svm1_pred == testing$Attack) / length(svm1_pred)
+
+results1 <- resamples(list(CART=fit.cart, SVM=fit.svm))
+summary(results1)
+
+# Entrenar el modelo de Random Forest
+# Medir el tiempo consumido en el cálculo del modelo
+start_time <- Sys.time()
+rf_model <- randomForest(Attack ~ ., data = training, ntree = 100)
+end_time <- Sys.time()
+elapsed_time_rf <- end_time - start_time
+rf_pred <- predict(rf_model, testing)
+rf_accuracy <- sum(rf_pred == testing$Attack) / length(rf_pred)
+
+# Entrenar el modelo de Red Neuronal
+start_time <- Sys.time()
+nn_model <- nnet(Attack ~ ., data = training, size = 5, maxit = 100)
+end_time <- Sys.time()
+elapsed_time_nn <- end_time - start_time
+nn_pred <- predict(nn_model, testing, type = "class")
+nn_accuracy <- sum(nn_pred == testing$Attack) / length(nn_pred)
+
+# Entrenar el modelo de Support Vector Machine
+start_time <- Sys.time()
+svm_model <- svm(Attack ~ ., data = training)
+end_time <- Sys.time()
+elapsed_time_svm <- end_time - start_time
+svm_pred <- predict(svm_model, testing)
+svm_accuracy <- sum(svm_pred == testing$Attack) / length(svm_pred)
+
+# Entrenar el modelo Naive Bayes
+start_time <- Sys.time()
+nb_model <- naiveBayes(Attack ~ ., data = training)
+end_time <- Sys.time()
+elapsed_time_nb <- end_time - start_time
+nb_pred <- predict(nb_model, testing, type = "class")
+nb_accuracy <- sum(nb_pred == testing$Attack) / length(nb_pred)
+
+results <- data.frame(Modelo = c("Random Forest", "Support Vector Machine", "Red Neuronal", "CART", "SVM", "Naive"),
+                      Precisión = c(rf_accuracy, svm_accuracy, nn_accuracy, cart_accuracy, svm1_accuracy, nb_accuracy),
+                      Tiempo =c(elapsed_time_rf, elapsed_time_svm, elapsed_time_nn, elapsed_time_cart, elapsed_time_svm1, elapsed_time_nb))
+print(results)
+
+cm <- confusionMatrix(rf_pred, testing$Attack)
+#results1 <- resamples(list(CART=fit.cart, SVM=fit.svm))
+#summary(results)
 ```
 
 
