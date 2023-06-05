@@ -1,7 +1,7 @@
 ---
 title: "Práctica Final Data Driven Security"
 author: "Grup CC: Toni Jordan Y Joan Dalmau"
-date: "1 de Junio de 2023"
+date: "Junio de 2023"
 output:
   html_document:
     toc: yes
@@ -17,10 +17,10 @@ output:
     toc_float: no
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
-knitr::opts_chunk$set(fig.align = 'center')
+```{r setup, echo=FALSE, results='hide'}
+knitr::opts_chunk$set(echo = TRUE)
 if (!dir.exists("data")) dir.create("data")
+knitr::opts_chunk$set(fig.align = 'center')
 
 library(randomForest)
 library(nnet)
@@ -33,7 +33,9 @@ library(doParallel)
 library(corrplot)
 library(class)
 library(data.table)
+library(knitr)
 #library(kableExtra)
+library(foreach)
 ```
 
 # Objetivo
@@ -44,8 +46,7 @@ Para poder llevar a cabo este estudio se dispone de dos datasets e información 
 
 ## Packages
 Para la realización de este proyecto se usan los siguientes packages de R: (revisar da error al generar)
-
-#```{r l_p, echo=FALSE, message=FALSE, warning=FALSE}
+```{r l_p, echo=FALSE, message=FALSE, warning=FALSE}
 # ipak function: install and load multiple R packages.
 # check to see if packages are installed. Install them if they are not, then load them into the R session.
 ipak <- function(pkg){
@@ -54,22 +55,32 @@ if (length(new.pkg))
     install.packages(new.pkg, dependencies = TRUE)
 sapply(pkg, require, character.only = TRUE)
 }
-#```
+```
 
-#```{r load_packages, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
-mypackages <- c("randomForest", "nnet", "readr", "caret", "e1071","dplyr","ggplot2", "doParallel","data.table", "kableExtra","corplot","class") #, "tidyr", "tidyverse", "DataExplorer", "ggridges", "hrbrthemes", "viridisLite", "viridis", "packcircles", "ggiraph", "Hmisc", "lubridate", "plotly", "data.table", "formattable", "visNetwork", "knitr", "sjmisc", "rworldmap", "stringr", "maps", "RJSONIO")
-#ipak(packages)
+```{r load_packages, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
+# Especificar un espejo de CRAN
+#setRepositories(addURLs = c(CRANxtras = "https://www.stats.ox.ac.uk/pub/RWin"))
+
+mypackages <- c("randomForest", "nnet", "readr", "caret", "e1071","dplyr","ggplot2", "doParallel","data.table", "kableExtra","corplot","class", "knitr", "tidyr")
+
+#,"tidyverse", "DataExplorer", "ggridges", "hrbrthemes", "viridisLite", "viridis", "packcircles", "ggiraph", "Hmisc", "lubridate", "plotly", "formattable", "visNetwork", "sjmisc", "rworldmap", "stringr", "maps", "RJSONIO")
+# Instalar y cargar los paquetes faltantes
+#ipak(mypackages)
+# Crear un data.table con los paquetes
 pa<-data.table(mypackages)
+
+# Dividir el data.table en tres partes
 cc<-as.integer(length(mypackages)/3)
 pa1<-pa[1:cc]
 pa2<- pa[(cc+1):(2*cc)]
 pa3<- pa[(2*cc+1):length(mypackages)]
-#```
-#```{r pack, echo=FALSE, message=FALSE, warning=FALSE}
+```
+
+```{r pack, echo=FALSE, message=FALSE, warning=FALSE}
 options(knitr.kable.NA = '')
-knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") %>%
-    kable_styling(bootstrap_options = c("striped", "condensed"))
-#```
+knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") #%>%
+#    kable_styling(bootstrap_options = c("striped", "condensed"))
+```
 
 ## Carga del Dataset Global y el Dataset Muestra
 ```{r read_data, echo=FALSE}
@@ -164,6 +175,7 @@ kdd_data_unique <- distinct(data, .keep_all = TRUE)
 duplicates <- nrow(data) - nrow(kdd_data_unique)
 # Imprimir el número de muestras duplicadas eliminadas
 cat("Número de muestras duplicadas eliminadas:", duplicates, "\n")
+rm(kdd_data_unique) #eliminamos dataset temporal
 ```
 
 ## Con el siguiente estudio se analiza el Dataset Muestra y el Dataset Global 
@@ -213,6 +225,7 @@ filtered_attack_table_n <- attack_table[attack_table$n_Ini < cant_min, ]
 print(attack_table) 
 print(filtered_attack_table)
 print(filtered_attack_table_n)
+rm(kdd_data_full_unique) #eliminamos dataset temporal
 ```
 
 ## Con el siguiente estudio se concluye que el Dataset Muestra es ya el Dataset Global filtrado y no es posible poblar el Dataset de trabajo
@@ -227,6 +240,7 @@ comparison_plot <- ggplot(filtered_attack_table, aes(x = Attack, y = Diferencia)
 
 # Imprimir el gráfico
 print(comparison_plot)
+rm(data_full)
 ```
 
 ## Tratamiento de las muestras residuales
@@ -415,49 +429,17 @@ heatmap(cm_rf$table)
 heatmap(cm_ori$table)
 heatmap(cm_pdf$table)
 heatmap(cm_teo$table)
+
+#elimina dataset temporales
+rm(data1_teorico, data1_pdf, data1_original)
+rm(training_teorico, training_pdf, training_original)
+rm(testing_teorico, testing_pdf, testing_original)
+rm(cm_teo, cm_pdf, cm_ori)
+rm(output.forest_teo, output.forest_pdf, output.forest_ori)
+rm(inTrain_teorico, inTrain_pdf, inTrain_original)
 ```
 
 ## conclusión: nos quedamos con la propuesta púramente estadística
-
-
-revisar por innecesario
-#```{r simple_validation, echo=FALSE}
-valid <- testing
-valid$Attack <- as.character(valid$Attack)
-valid$pred <- as.character(pred)
-valid$match <- valid$Attack == valid$pred
-
-# Calcular eficacia
-df <- table(valid$match)
-ok <- sum(valid$match) / nrow(valid) * 100
-
-valid_ori <- testing_original
-valid_ori$Attack <- as.character(valid_ori$Attack)
-valid_ori$pred <- as.character(pred_ori)
-valid_ori$match <- valid_ori$Attack == valid_ori$pred
-
-df_ori <- table(valid_ori$match)
-ok_ori <- sum(valid_ori$match) / nrow(valid_ori) * 100
-
-valid_pdf <- testing_pdf
-valid_pdf$Attack <- as.character(valid_pdf$Attack)
-valid_pdf$pred <- as.character(pred_pdf)
-valid_pdf$match <- valid_pdf$Attack == valid_pdf$pred
-
-df_pdf <- table(valid_pdf$match)
-ok_pdf <- sum(valid_pdf$match) / nrow(valid_pdf) * 100
-
-valid_teo <- testing_teorico
-valid_teo$Attack <- as.character(valid_teo$Attack)
-valid_teo$pred <- as.character(pred_teo)
-valid_teo$match <- valid_teo$Attack == valid_teo$pred
-
-df_teo <- table(valid_teo$match)
-ok_teo <- sum(valid_teo$match) / nrow(valid_teo) * 100
-#```
-
-# Fase de testeo de la eficacia de los diferentes modelos
-Conclusión nos quedamos con Random Forest
 
 ```{r 2_3_other_model_tests, echo=FALSE}
 # Me quedo con las variables numéricas
@@ -734,6 +716,45 @@ if (length(unclassified_attacks) > 0) {
   cat("Todos los valores de Attack han sido clasificados correctamente.")
 }
 ```
+
+revisar por innecesario
+#```{r simple_validation, echo=FALSE}
+valid <- testing
+valid$Attack <- as.character(valid$Attack)
+valid$pred <- as.character(pred)
+valid$match <- valid$Attack == valid$pred
+
+# Calcular eficacia
+df <- table(valid$match)
+ok <- sum(valid$match) / nrow(valid) * 100
+
+valid_ori <- testing_original
+valid_ori$Attack <- as.character(valid_ori$Attack)
+valid_ori$pred <- as.character(pred_ori)
+valid_ori$match <- valid_ori$Attack == valid_ori$pred
+
+df_ori <- table(valid_ori$match)
+ok_ori <- sum(valid_ori$match) / nrow(valid_ori) * 100
+
+valid_pdf <- testing_pdf
+valid_pdf$Attack <- as.character(valid_pdf$Attack)
+valid_pdf$pred <- as.character(pred_pdf)
+valid_pdf$match <- valid_pdf$Attack == valid_pdf$pred
+
+df_pdf <- table(valid_pdf$match)
+ok_pdf <- sum(valid_pdf$match) / nrow(valid_pdf) * 100
+
+valid_teo <- testing_teorico
+valid_teo$Attack <- as.character(valid_teo$Attack)
+valid_teo$pred <- as.character(pred_teo)
+valid_teo$match <- valid_teo$Attack == valid_teo$pred
+
+df_teo <- table(valid_teo$match)
+ok_teo <- sum(valid_teo$match) / nrow(valid_teo) * 100
+#```
+
+# Fase de testeo de la eficacia de los diferentes modelos
+Conclusión nos quedamos con Random Forest
 
 
 
