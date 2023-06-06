@@ -29,18 +29,18 @@ library(caret)
 library(e1071)  #Naive Bayes
 library(dplyr)
 library(ggplot2)
-library(doParallel)
+library(doParallel) #paralelizacion
 library(corrplot)
 library(class)
 library(data.table)
 library(knitr)
 #library(kableExtra)
-library(foreach)
+library(foreach)  #paralelizacion
 ```
 
 # Objetivo
 
-El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset de incidentes KDD CUP 99 para determinar cual es el mejor conjunto de variables que podmaos usar en un entremiento de Machine learnings y Finalmente conseguir un juego de Dataset y modelo de entreno que mejore el valor obtenido por el script del enunciado.
+El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset de incidentes KDD CUP 99 para determinar cual es el mejor conjunto de variables que podamaos usar en un entrenamiento de Machine Learnings y Finalmente conseguir un juego de Dataset y modelo de entreno que mejore el valor obtenido por el script del enunciado.
 
 Para poder llevar a cabo este estudio se dispone de dos datasets e información sobre los estandar Mitre de ATT&CK y las conclusiones sobre los incidentes.
 
@@ -81,8 +81,14 @@ options(knitr.kable.NA = '')
 knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") #%>%
 #    kable_styling(bootstrap_options = c("striped", "condensed"))
 ```
+# Análisis y preprocesamiento de los conjuntos de datos
 
-## Carga del Dataset Global y el Dataset Muestra
+En esta sección, realizaremos un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". También llevaremos a cabo un preprocesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de aprendizaje automático.
+
+## Carga de los conjuntos de datos
+
+Comenzamos cargando los conjuntos de datos "Dataset Global" y "Dataset Muestra" en R.
+
 ```{r read_data, echo=FALSE}
 data_full <- read_csv("Book1.csv",
                   col_types = cols(SrcBytes = col_integer(),
@@ -107,9 +113,42 @@ data <- read.csv("Book2.csv", header=T)
 ## 3.- Mejora de la información y valor añadido
 3.1.- estudios EDA de las variables
 3.2.- información agregada MITRE ATT&CK y CWE
+## Exploración de los conjuntos de datos
 
-```{r 0_study_data, echo=FALSE}
-# Contar el número de variables cualitativas y cuantitativas
+A continuación, realizaremos un análisis exploratorio de los conjuntos de datos para comprender su estructura y contenido.
+
+```{r explore_data, echo=TRUE}
+# Visualizar las primeras filas del Dataset Global
+head(data_full)
+
+# Visualizar las primeras filas del Dataset Muestra
+head(data)
+```
+
+El conjunto de datos "Dataset Global" contiene las siguientes columnas: SrcBytes, DstBytes, Land, WrongFragment, Urgent, Hot y NumFailedLogin.... Cada fila representa un incidente.
+
+El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conjunto de datos "Dataset Global" y se utiliza como una muestra de incidencias para nuestro estudio.
+
+## Validación y preprocesamiento del conjunto de datos de muestra
+
+En esta sección, realizaremos algunas validaciones y preprocesamiento en el conjunto de datos de muestra para asegurarnos de que cumpla con nuestros requisitos.
+
+### 1.1. Estudio del conjunto de datos de muestra y su contenido
+
+Vamos a realizar un estudio más detallado del conjunto de datos de muestra y su contenido.
+
+```{r study_sample_data, echo=TRUE, results='hide'}
+# Resumen del conjunto de datos de muestra
+summary(data)
+
+# Tipos de datos de las columnas del conjunto de datos de muestra
+str(data)
+```
+
+El conjunto de datos de muestra tiene 77.291 filas y 42 columnas. `r dim(data)`.
+
+```{r 0_study_data, echo=FALSE, , results='hide'}
+# Contar el número de variables cualitativas, cuantitativas y factor
 num_qualitative <- sum(sapply(data, is.character))
 num_quantitative <- sum(sapply(data, is.numeric))
 num_factor <- sum(sapply(data, is.factor))
@@ -117,7 +156,11 @@ num_factor <- sum(sapply(data, is.factor))
 # Crear una tabla resumen
 summary_table <- data.frame(Tipo = c("Cualitativa", "Cuantitativa", "Factor"),
                             Numero = c(num_qualitative, num_quantitative, num_factor))
+```
 
+Contiene `r print(num_qualitative)` variable numéricas cuantitativas y `r print(num_quantitative)` variables cualitativas, estas las columnas son: "ProtocolType", "Service", "Flag" y "Attack", que representa la variable objetivo.
+
+```{r 0b_study_data, echo=FALSE}
 # Imprimir la tabla resumen
 print(summary_table)
 
@@ -157,6 +200,11 @@ for (variable in summary_table2$Variable) {
   print(plot)
 }
 ```
+
+### 1.2. Validación de duplicados en el conjunto de datos de muestra
+
+Vamos a validar si el conjunto de datos de muestra contiene filas duplicadas y, en caso afirmativo, eliminaremos las duplicadas.
+
 
 ```{r 1_study_data, echo=FALSE}
 # Calcular el número de muestras duplicadas o iguales
@@ -364,7 +412,7 @@ highlyCorrelated <- findCorrelation(correlation, verbose=F, names=T)
 
 #columna con alta correlación entre ellas, se pueden eliminar
 columns_to_remove <- c("DstHostSameSrvRate", "DstHostSrvRerrorRate", "DstHostRerrorRate", "RerrorRate", "DstHostSrvSerrorRate", "DstHostSerrorRate", "SrvSerrorRate")
-#data1 <- data1[, setdiff(names(data1), columns_to_remove)]
+data1 <- data1[, setdiff(names(data1), columns_to_remove)]
 
 # Añadir la variable "Attack" al dataset filtrado
 data1$Attack <- as.factor(data$Attack)
@@ -461,7 +509,7 @@ cart_accuracy <- round(sum(cart_pred == testing$Attack) / length(cart_pred)* 100
 
 # cálculo de KNN predictor.
 start_time <- Sys.time()
-knn_model <- knn(train = training_num, test = testing[, 1:20], cl = training$Attack, k = 5)
+knn_model <- knn(train = training_num, test = testing[, 1:13], cl = training$Attack, k = 5)
 end_time <- Sys.time()
 elapsed_time_knn <- end_time - start_time
 #knn_pred <- predict(knn_model, testing)
@@ -513,7 +561,7 @@ heatmap(cm_rf$table)
 ## Entrenamiento con Random Forest Final
 ```{r 2_4_tunning_RF_model_tests, echo=FALSE}
 rf_trees_fin <- 200
-part_fin <- 0.2 
+part_fin <- 0.5 
 
 # Añadir columna "Anomaly" al dataset data1
 data1$Anomaly <- ifelse(data1$Attack == "normal.", FALSE, TRUE)
