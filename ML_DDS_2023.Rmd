@@ -1,5 +1,5 @@
 ---
-title: "Práctica Final Data Driven Security"
+title: "Práctica Final en Data Driven Security"
 author: "Grup CC: Toni Jordan Y Joan Dalmau"
 date: "Junio de 2023"
 output:
@@ -9,13 +9,16 @@ output:
     toc_float: true
     toc_collapsed: true
     toc_depth: 4
-    theme: yeti
+    df_print: paged
+    theme: spacelab
 ---
 
 ```{r setup, echo=FALSE, results='hide'}
-knitr::opts_chunk$set(echo = FALSE)
-knitr::opts_chunk$set(fig.align = 'center')
+# Opciones de configuración de knitr
+options(knitr.kable.NA = '')
+knitr::opts_chunk$set(echo = FALSE, fig.align = 'center')
 
+# Cargar paquetes necesarios
 library(randomForest)
 library(nnet)
 library(readr)
@@ -28,21 +31,22 @@ library(corrplot)
 library(class)
 library(data.table)
 library(knitr)
-#library(kableExtra)
+library(kableExtra)
 library(foreach)  #paralelizacion
+library(grid)
 ```
 
 # Objetivo
 
-El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset KDD CUP 99 para determinar cual es el mejor conjunto de variables que podamaos usar en un entrenamiento de Machine Learnings y finalmente conseguir un juego de datos y modelo de entreno que mejore el valor obtenido por el script del enunciado.
+El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset KDD CUP 99 para determinar cuál es el mejor conjunto de variables que podemos usar en un entrenamiento de Machine Learning de clasificación y finalmente conseguir un juego de datos y modelo de entrenamiento que mejore el valor obtenido por el script del enunciado.
 
-Para poder llevar a cabo este estudio se dispone de dos ficheros de datos con incidencias etiquetadas, una codificación de ejemplo en R, información sobre los estandar Mitre de ATT&CK y unas primeras conclusiones sobre los datos.
+Para llevar a cabo este estudio, se dispone de dos archivos de datos con incidencias etiquetadas, una codificación de ejemplo en R, información sobre los estándares Mitre de ATT&CK y unas primeras conclusiones sobre los datos
 
 ## Packages
-Para la realización de este proyecto se usan los siguientes packages de R: (revisar da error al generar)
+En esta práctica se utilizarán los siguientes paquetes de R:
 
 ```{r load_packages, echo=FALSE, message=FALSE, warning=FALSE, results='hide'}
-mypackages <- c("randomForest", "nnet", "readr", "caret", "e1071","dplyr","ggplot2", "doParallel","data.table", "kableExtra","corplot","class", "knitr", "tidyr")
+mypackages <- c("randomForest", "nnet", "readr", "caret", "e1071","dplyr","ggplot2", "doParallel","data.table", "kableExtra","corplot","class", "knitr", "tidyr", "grid")
 
 # Crear un data.table con los paquetes
 pa<-data.table(mypackages)
@@ -56,36 +60,36 @@ pa3<- pa[(2*cc+1):length(mypackages)]
 
 ```{r pack, echo=FALSE, message=FALSE, warning=FALSE}
 options(knitr.kable.NA = '')
-knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") #%>%
-    #kable_styling(bootstrap_options = c("striped", "condensed"))
+knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"))
 ```
-## Esquema del documento:
+## Esquema argumental del documento:
 
-### 1.- Validación y pre-porcesado del Dataset Muestra respecto al Dataset Global entregado
-1.1.- Estudio del Dataset Muestra y su contenido
-1.2.- Se valida que el Dataset Muestra no contiene duplicados
-1.3.- Se valida que el Dataset Muestra tiene las muestra suficientes de la variable "Attack" para mantener las mismas proporciones que el Dataset Global.
-1.4.- Se valida si es posible augmentar el número de muestras con el Dataset Global
-1.5.- Se decide que hacer con las variables con muy bajas muestras
+### Validación y pre-porcesado del "Dataset Muestra" respecto al "Dataset Global" entregado  {-}
+- Estudio del Dataset Muestra y su contenido  
+- Validación de duplicados en el Dataset Muestra  
+- Validación de proporciones de la variable "Attack" en el Dataset Muestra  
+- Posibilidad de aumentar el número de muestras con el Dataset Global  
+- Tratamiento de variables con bajas muestras  
 
-### 2.- Selector de variables
-2.1.- Criterios de la selección y competividad de los precurosores con RandomFores
-2.2.- Comparativa de diferentes modelos ML
-2.3.- Optimización del ML y conclusiones
+### Selector de variables  {-}
+- Criterios de selección y competividad de los precursores con Random Forest  
+- Comparativa de diferentes modelos de Machine Learning  
+- Optimización del modelo de Machine Learning y conclusiones  
 
-### 3.- Mejora de la información y valor añadido
-3.1.- estudios EDA de las variables
-3.2.- información agregada MITRE ATT&CK y CWE
+### Mejora de la información y valor añadido  {-}
+- Estudios EDA de las variables  
+- Información agregada MITRE ATT&CK y CWE  
 
-## Análisis y preprocesamiento de los conjuntos de datos
+## Análisis y preprocesamiento de los conjuntos de datos  
 
-En esta sección, realizaremos un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". También llevaremos a cabo un preprocesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de aprendizaje automático.
+En esta sección, se realizará un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". Además, se llevará a cabo un preprocesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de Machine Learning.  
 
-### Carga de los conjuntos de datos
+### Carga de los conjuntos de datos  
 
-Comenzamos cargando los conjuntos de datos "Dataset Global" y "Dataset Muestra" en R.
+Comenzamos cargando los conjuntos de datos "Dataset Global" y "Dataset Muestra" en R.  
 
-```{r read_dataset, echo=TRUE}
+```{r read_dataset, echo=TRUE, cache=TRUE}
 data_full <- read_csv("Book1.csv",
                   col_types = cols(SrcBytes = col_integer(),
                                    DstBytes = col_integer(), Land = col_integer(),
@@ -94,11 +98,11 @@ data_full <- read_csv("Book1.csv",
 data <- read.csv("Book2.csv", header=T)
 ```
 
-### Exploración de los conjuntos de datos
+### Exploración de los conjuntos de datos  
 
-A continuación, realizaremos un análisis exploratorio de los conjuntos de datos para comprender su estructura y contenido.
+A continuación, realizaremos un análisis exploratorio de los conjuntos de datos para comprender su estructura y contenido.  
 
-```{r explore_data, eval=FALSE, results='hide'}
+```{r explore_data, echo=FALSE, eval=TRUE, cache=TRUE}
 # Visualizar las primeras filas del Dataset Global
 head(data_full)
 
@@ -106,17 +110,17 @@ head(data_full)
 head(data)
 ```
 
-El conjunto de datos "Dataset Global" contiene las siguientes columnas: SrcBytes, DstBytes, Land, WrongFragment, Urgent, Hot y NumFailedLogin.... Cada fila representa un incidente.
+El conjunto de datos "Dataset Global" contiene las siguientes columnas: SrcBytes, DstBytes, Land, WrongFragment, Urgent, Hot y NumFailedLogin.... Cada fila representa un incidente.  
 
-El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conjunto de datos "Dataset Global" y se utiliza como una muestra de incidencias para nuestro estudio.
+El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conjunto de datos "Dataset Global" y se utiliza como una muestra de incidencias para nuestro estudio.  
 
-### Validación y preprocesamiento del conjunto de datos de muestra
+### Validación y preprocesamiento del conjunto de datos de muestra  
 
-En esta sección, realizaremos algunas validaciones y preprocesamiento en el conjunto de datos de muestra para asegurarnos de que cumpla con nuestros requisitos.
+En esta sección, se realizarán algunas validaciones y preprocesamientos en el conjunto de datos de muestra para asegurarnos de que cumpla con nuestros requisitos.  
 
-### 1.1. Estudio del conjunto de datos de muestra y su contenido
+#### Estudio del conjunto de datos de muestra y su contenido  
 
-Vamos a realizar un estudio más detallado del conjunto de datos de muestra y su contenido.
+A continuación, se realizará un estudio más detallado del conjunto de datos de muestra y su contenido.  
 
 ```{r study_sample_data, eval=FALSE, results='hide'}
 # Resumen del conjunto de datos de muestra
@@ -125,10 +129,13 @@ summary(data)
 # Tipos de datos de las columnas del conjunto de datos de muestra
 str(data)
 ```
+```{r echo=TRUE,eval=FALSE} 
+dim(data)
+```
 
-El conjunto de datos de muestra tiene 77.291 filas y 42 columnas. ```{r eval=FALSE} dim(data)```
+El conjunto de datos de muestra tiene **`r nrow(data)`** filas y **`r ncol(data)`** columnas. Se distribuyen en los siguientes tipos:
 
-```{r 0_study_data, echo=FALSE, results='hide'}
+```{r 0_study_data, echo=FALSE, cache=TRUE}
 # Contar el número de variables cualitativas, cuantitativas y factor
 num_qualitative <- sum(sapply(data, is.character))
 num_quantitative <- sum(sapply(data, is.numeric))
@@ -137,14 +144,17 @@ num_factor <- sum(sapply(data, is.factor))
 # Crear una tabla resumen
 summary_table <- data.frame(Tipo = c("Cualitativa", "Cuantitativa", "Factor"),
                             Numero = c(num_qualitative, num_quantitative, num_factor))
-```
 
-Contiene **`r summary_table$Numero[2]`** variable numéricas cuantitativas y **`r summary_table$Numero[1]`** variables cualitativas, estas las columnas son: "ProtocolType", "Service", "Flag" y "Attack", que representa la variable objetivo.
-
-```{r 0b_study_data, echo=FALSE}
-# Imprimir la tabla resumen
-print(summary_table)
+# Imprimir la tabla resumen usando la función knitr::kable()
+knitr::kable(summary_table, caption = "Clasificación por tipos de Variables") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"))
 ```
+Contiene **`r summary_table$Numero[2]`** variable numéricas cuantitativas y **`r summary_table$Numero[1]`** variables cualitativas.
+
+Las columnas cualitativas son: "ProtocolType", "Service", "Flag" y "Attack" que representa la variable objetivo.
+
+
+
 ```{r 0c_study_data, echo=FALSE, results='hide'}
 # Seleccionar solo las variables cualitativas
 qualitative_vars <- select_if(data, is.character)
@@ -168,12 +178,20 @@ for (i in 1:length(distinct_values)) {
 summary_table2 <- summary_table2 %>% arrange(Variable)
 ```
 
-```{r 0b2_study_data, echo=FALSE}
+```{r 0b2_study_data, echo=FALSE, results='hide'}
 # Imprimir la tabla resumen
 print(summary_table2)
 
 # Crear un gráfico explicativo por cada variable cualitativa
-for (variable in summary_table2$Variable) {
+num_variables <- nrow(summary_table2)
+num_rows <- 2  # Número de filas en la matriz de gráficos
+num_cols <- ceiling(num_variables / num_rows)  # Número de columnas en la matriz de gráficos
+
+# Establecer la disposición de los gráficos
+layout(matrix(1:num_variables, nrow = num_rows, ncol = num_cols))
+
+for (i in 1:num_variables) {
+  variable <- summary_table2$Variable[i]
   plot_data <- table(data[[variable]])
   
   plot <- barplot(plot_data, main = paste("Número de Muestras por Valor Cualitativo -", variable),
@@ -183,6 +201,10 @@ for (variable in summary_table2$Variable) {
   # Imprimir el gráfico
   print(plot)
 }
+
+# Restaurar la configuración del dispositivo gráfico
+layout(1)
+
 ```
 
 ### 1.2. Validación de duplicados en el conjunto de datos de muestra
@@ -404,7 +426,7 @@ data1 <- data1[, setdiff(names(data1), columns_to_remove)]
 data1$Attack <- as.factor(data$Attack)
 ```
 
-```{r 2_1_feature_selection, echo=FALSE}
+```{r 2_1_feature_selection, echo=FALSE, cache=TRUE}
 parte <- 0.1  #mínima toma de muestras para acelerar el cálculo
 
 set.seed(123)
@@ -430,7 +452,7 @@ testing_teorico <- data1_teorico[-inTrain_teorico,]
 dim(training_teorico)
 ```
 
-```{r 2_1_feature_selection_train_random_forest, echo=FALSE}
+```{r 2_1_feature_selection_train_random_forest, echo=FALSE,cache=TRUE}
 rf_trees <- 200
 output.forest <- randomForest(Attack ~ ., data = training, ntree = rf_trees, na.action=na.fail)
 output.forest_ori <- randomForest(Attack ~ ., data = training_original, ntree = rf_trees, na.action=na.fail)
@@ -438,7 +460,7 @@ output.forest_pdf <- randomForest(Attack ~ ., data = training_pdf, ntree = rf_tr
 output.forest_teo <- randomForest(Attack ~ ., data = training_teorico, ntree = rf_trees, na.action=na.fail)
 ```
 
-```{r 2_1_feature_selection_predict, echo=FALSE}
+```{r 2_1_feature_selection_predict, echo=FALSE, cache=TRUE}
 pred <- predict(output.forest,testing)
 rf_accuracy <- sum(pred == testing$Attack) / length(pred)
 
@@ -473,9 +495,9 @@ rm(output.forest_teo, output.forest_pdf, output.forest_ori)
 rm(inTrain_teorico, inTrain_pdf, inTrain_original)
 ```
 
-## conclusión: nos quedamos con la propuesta púramente estadística
+## conclusión: nos quedamos con la propuesta de variables púramente estadística
 
-```{r 2_3_other_model_tests, echo=FALSE}
+```{r 2_3_other_model_tests, echo=FALSE, cache=TRUE}
 # Me quedo con las variables numéricas
 num_vars = sapply(training, is.numeric)
 training_num = training[, num_vars]
@@ -575,26 +597,55 @@ rf_fin_model <- randomForest(Attack ~ .,
 end_time <- Sys.time()
 elapsed_time_fin <- end_time - start_time
 rf_fin_pred <- predict(rf_fin_model, testing_fin)
-rf_fin_accuracy <- round((sum(rf_fin_pred == testing_fin$Attack) / length(rf_fin_pred))*100, 2)
+#rf_fin_accuracy <- round((sum(rf_fin_pred == testing_fin$Attack) / length(rf_fin_pred))*100, 2)
 
 predictors(rf_fin_model)
 plot(rf_fin_model)
 
-print(rf_fin_accuracy)
-print(elapsed_time_fin)
 cm_fin <- confusionMatrix(rf_fin_pred, testing_fin$Attack)
 heatmap(cm_fin$table)
 
-print(round(cm_fin$overall[1], 4)*100)
-print(round(cm_fin$overall[2], 4)*100)
+rf_fin_accuracy <- round(cm_fin$overall[1], 4)*100
+rf_fin_kappa <- round(cm_fin$overall[2], 4)*100
+resultado_final <- data.frame( Accuracy= as.numeric(rf_fin_accuracy),
+                               Kappa= as.numeric(rf_fin_kappa),
+                               Tiempo= as.numeric(round(elapsed_time_fin, 2)))
 
-valid <- testing_fin
-valid$Attack <- as.character(valid$Attack)
-valid$pred <- as.character(rf_fin_pred)
-valid$match <- valid$Attack == valid$pred
+print(resultado_final)
+#table(valid$match)
 
-table(valid$match)
-table(valid[, c("Attack", "match")])
+# Crear una nueva columna "match" en la tabla valid
+valid <- testing_fin %>%
+  mutate(Attack = as.character(Attack),
+         pred = as.character(rf_fin_pred),
+         match = Attack == pred)
+
+# Calcular el número total de registros por variable Attack
+total_per_attack <- table(valid$Attack)
+
+# Calcular el número de aciertos por variable Attack
+aciertos_per_attack <- tapply(valid$match, valid$Attack, function(x) sum(x))
+
+# Calcular el número de fallos por variable Attack
+fallos_per_attack <- total_per_attack - aciertos_per_attack
+
+# Calcular el Accuracy por variable Attack
+accuracy_per_attack <- round((aciertos_per_attack / total_per_attack *100), 2)
+
+# Crear la tabla tabla_fin con fallos, aciertos y Accuracy por variable Attack
+tabla_fin <- data.frame(Attack = names(total_per_attack),
+                        Aciertos = as.integer(aciertos_per_attack),
+                        Fallos = as.integer(fallos_per_attack),
+                        Accuracy = as.numeric(accuracy_per_attack))
+
+# Ordenar la tabla_fin por Accuracy y Total Aciertos
+tabla_fin <- tabla_fin %>%
+  arrange(desc(Accuracy), desc(Aciertos))
+
+# Mostrar la tabla tabla_fin actualizada
+print(tabla_fin)
+
+
 ```
 
 # EDA: Esta sección es para completar el estudio de los datos y sus relaciones
