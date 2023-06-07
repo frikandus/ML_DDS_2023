@@ -34,13 +34,17 @@ library(knitr)
 library(kableExtra)
 library(foreach)  #paralelizacion
 library(grid)
+
+#Constantes utilizadas en el programa
+rf_trees <- 200    #número máximo de arboles para RandomForest Final
+limite <- 50       #número mínimo de muestras para considerar mantener una variable unitaria
 ```
 
 # Objetivo
 
 El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset KDD CUP 99 para determinar cuál es el mejor conjunto de variables que podemos usar en un entrenamiento de Machine Learning de clasificación y finalmente conseguir un juego de datos y modelo de entrenamiento que mejore el valor obtenido por el script del enunciado.
 
-Para llevar a cabo este estudio, se dispone de dos archivos de datos con incidencias etiquetadas, una codificación de ejemplo en R, información sobre los estándares Mitre de ATT&CK y unas primeras conclusiones sobre los datos
+Para llevar a cabo este estudio, se dispone de dos archivos de datos con incidencias etiquetadas, una codificación de ejemplo en R, información sobre los estándares Mitre de ATT&CK y unas primeras conclusiones sobre los datos.
 
 ## Packages
 En esta práctica se utilizarán los siguientes paquetes de R:
@@ -81,11 +85,11 @@ knitr::kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Required:") %>%
 - Estudios EDA de las variables  
 - Información agregada MITRE ATT&CK y CWE  
 
-## Análisis y preprocesamiento de los conjuntos de datos  
+# Análisis y preprocesamiento de los conjuntos de datos  
 
 En esta sección, se realizará un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". Además, se llevará a cabo un preprocesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de Machine Learning.  
 
-### Carga de los conjuntos de datos  
+## Carga de los conjuntos de datos  
 
 Comenzamos cargando los conjuntos de datos "Dataset Global" y "Dataset Muestra" en R.  
 
@@ -118,7 +122,7 @@ El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conju
 
 En esta sección, se realizarán algunas validaciones y preprocesamientos en el conjunto de datos de muestra para asegurarnos de que cumpla con nuestros requisitos.  
 
-#### Estudio del conjunto de datos de muestra y su contenido  
+#### Estudio del conjunto de datos de muestra y su contenido  {-}
 
 A continuación, se realizará un estudio más detallado del conjunto de datos de muestra y su contenido.  
 
@@ -155,7 +159,7 @@ Las columnas cualitativas son: "ProtocolType", "Service", "Flag" y "Attack" que 
 
 
 
-```{r 0c_study_data, echo=FALSE, results='hide'}
+```{r 0c_study_data, echo=FALSE, results='hide', cache=TRUE}
 # Seleccionar solo las variables cualitativas
 qualitative_vars <- select_if(data, is.character)
 
@@ -178,7 +182,7 @@ for (i in 1:length(distinct_values)) {
 summary_table2 <- summary_table2 %>% arrange(Variable)
 ```
 
-```{r 0b2_study_data, echo=FALSE, results='hide'}
+```{r 0b2_study_data, echo=FALSE, results='hide', fig.align='center', fig.cap='Variables Cualitativas', cache=TRUE}
 # Imprimir la tabla resumen
 print(summary_table2)
 
@@ -204,14 +208,13 @@ for (i in 1:num_variables) {
 
 # Restaurar la configuración del dispositivo gráfico
 layout(1)
-
 ```
 
-### 1.2. Validación de duplicados en el conjunto de datos de muestra
+### Validación de duplicados en el conjunto de datos de muestra
 
 Vamos a validar si el conjunto de datos de muestra contiene filas duplicadas y, en caso afirmativo, eliminaremos las duplicadas.
 
-```{r 1b_study_data, echo=FALSE, results='hide'}
+```{r 1b_study_data, echo=FALSE, results='hide', cache=TRUE}
 # Calcular el número de muestras duplicadas o iguales
 duplicates <- data %>%
   group_by_all() %>%
@@ -221,7 +224,7 @@ duplicates <- data %>%
 print(summary_table)
 ```
 
-```{r 0b3_study_data, echo=FALSE}
+```{r 0b3_study_data, echo=FALSE, cache=TRUE}
 # Imprimir la tabla ordenada
 print(duplicates)
 
@@ -234,9 +237,9 @@ cat("Número de muestras duplicadas eliminadas:", duplicates, "\n")
 rm(kdd_data_unique) #eliminamos dataset temporal
 ```
 
-## Con el siguiente estudio se analiza el Dataset Muestra y el Dataset Global 
+### Con el siguiente estudio se analiza el Dataset Muestra y el Dataset Global 
 
-```{r 2_study_data, echo=FALSE}
+```{r 2_study_data, echo=FALSE, cache=TRUE}
 #Valor extremoa de la diferencia de porcetage permitido XX% y cantidad mínima de muestras
 difer_n <- 3
 cant_min <- 1000
@@ -284,9 +287,9 @@ print(filtered_attack_table_n)
 rm(kdd_data_full_unique) #eliminamos dataset temporal
 ```
 
-## Con el siguiente estudio se concluye que el Dataset Muestra es ya el Dataset Global filtrado y no es posible poblar el Dataset de trabajo
+### Con el siguiente estudio se concluye que el Dataset Muestra es ya el Dataset Global filtrado y no es posible poblar el Dataset de trabajo
 
-```{r 3_study_data, echo=FALSE}
+```{r 3_study_data, echo=FALSE, fig.align='center', fig.cap='Comparativa Data_Full<>Data', cache=TRUE}
 # Crear un gráfico de barras comparativo
 comparison_plot <- ggplot(filtered_attack_table, aes(x = Attack, y = Diferencia)) +
   geom_bar(stat = "identity", fill = "blue", alpha = 0.5) +
@@ -300,9 +303,9 @@ rm(data_full)
 ```
 
 ## Tratamiento de las muestras residuales
-```{r  4_study_data, echo=FALSE}
-data <- read.csv("Book2.csv",header=T)
-limite <- 50       #número mínimo de muestras para considerarla independientemente
+```{r  4_study_data, echo=FALSE, fig.align='center', fig.cap='Agrupando variables residuales', out.width='50%', fig.show='hold', cache=TRUE}
+#data <- read.csv("Book2.csv",header=T)
+#limite <- 50       #número mínimo de muestras para considerarla independientemente
 
 # Filtrar los casos que no tienen el valor "normal."
 data_filtered <- data %>% filter(Attack != "normal.")
@@ -383,23 +386,23 @@ Si alguno de los niveles de una variable cualitativa tiene muy pocas observacion
 ## Selección de Predictores
 
 Sección de carga de los diferentes modelos de subset por variables
-```{r 2_feature_selection, echo=FALSE}
+```{r 2_feature_selection, echo=FALSE, cache=TRUE}
 # Enunciado de la práctica
 data1_original <- data[,c("SrcBytes", "DstBytes", "Land", "WrongFragment", "Urgent", "SameSrvRate", "LoggedIn",  "DstHostSameSrvRate", "DstHostSrvCount","Flag","Attack" )]
 
 # pdf de soporte
 data1_pdf <- data[,c("SrcBytes", "DstBytes", "DstHostSameSrvRate", "Count", "DstHostDiffSrvRate","Attack" )]
 
-# Criterio tóerico de los expertos en Networking
+# Criterio teórico de los expertos en Networking
 data1_teorico <- data[,c("SrcBytes", "DstBytes", "Land", "WrongFragment", "Urgent", "Hot","NumFailedLogin","Attack" )]
 data1_original$Attack <- as.factor(data1_original$Attack)
 data1_pdf$Attack <- as.factor(data1_pdf$Attack)
 data1_teorico$Attack <- as.factor(data1_teorico$Attack)
 ```
 
-# modulo de selección de las variables finales por criterios puramente estadísticos
+### modulo de selección de las variables finales por criterios puramente estadísticos
 ```{r 2_2_feature_selection, echo=FALSE}
-# Criterio de la Varianza
+# Criterio de la Varianza, para validación manual
 #data1 <- data[,c("SrcBytes", "DstBytes", "Count", "DstHostSameSrvRate", "DstHostDiffSrvRate", "DstHostSrvDiffHostRate", "LoggedIn","SrvCount", "SerrorRate", "SrvSerrorRate", "RerrorRate", "SrvRerrorRate", "DiffSrvRate","SrvDiffHostRate", "DstHostSrvCount", "DstHostSameSrcPortRate", "DstHostSerrorRate", "DstHostSrvSerrorRate", "DstHostRerrorRate", "DstHostSrvRerrorRate","Attack" )]
 
 # me quedo solo con las variables numéricas en nuevo data1
@@ -452,8 +455,8 @@ testing_teorico <- data1_teorico[-inTrain_teorico,]
 dim(training_teorico)
 ```
 
-```{r 2_1_feature_selection_train_random_forest, echo=FALSE,cache=TRUE}
-rf_trees <- 200
+```{r 2_1_feature_selection_train_random_forest, echo=FALSE, cache=TRUE}
+#rf_trees <- 200
 output.forest <- randomForest(Attack ~ ., data = training, ntree = rf_trees, na.action=na.fail)
 output.forest_ori <- randomForest(Attack ~ ., data = training_original, ntree = rf_trees, na.action=na.fail)
 output.forest_pdf <- randomForest(Attack ~ ., data = training_pdf, ntree = rf_trees, na.action=na.fail)
@@ -495,89 +498,93 @@ rm(output.forest_teo, output.forest_pdf, output.forest_ori)
 rm(inTrain_teorico, inTrain_pdf, inTrain_original)
 ```
 
-## conclusión: nos quedamos con la propuesta de variables púramente estadística
+ **Conclusión: nos quedamos con la propuesta de variables púramente estadística**
 
-```{r 2_3_other_model_tests, echo=FALSE, cache=TRUE}
+```{r 2_3_other_model_tests, echo=FALSE, results='hide', fig.align='center', out.width='50%', fig.show='hold', cache=TRUE}
+# Función para calcular precisión y tiempo de ejecución
+calculate_accuracy_time <- function(model, training, testing) {
+  end_time <- Sys.time()
+  elapsed_time <- round((end_time - start_time), 2)
+  pred <- predict(model, testing)
+  cm_model <- confusionMatrix(pred, testing$Attack)
+  cm_accuracy <- round(cm_model$overall[1], 4)*100
+  cm_kappa <- round(cm_model$overall[2], 4)*100
+  heatmap(cm_model$table)
+  return(list(accuracy = cm_accuracy, cm_kappa = cm_kappa, elapsed_time = elapsed_time))
+}
+
 # Me quedo con las variables numéricas
-num_vars = sapply(training, is.numeric)
-training_num = training[, num_vars]
+num_vars <- sapply(training, is.numeric)
+training_num <- training[, num_vars]
 
-control <- trainControl(method="cv", number=2)
+control <- trainControl(method = "cv", number = 2)
 metric <- "Accuracy"
 set.seed(123)
 
-# CART (Classification and Regression Trees) OK
+# Random Forest
 start_time <- Sys.time()
-fit.cart <- train(Attack ~ ., data=training, method="rpart", metric=metric, trControl=control)
-end_time <- Sys.time()
-elapsed_time_cart <- end_time - start_time
+rf_model <- randomForest(Attack ~ ., data = training, ntree = 100)
+rf_results <- calculate_accuracy_time(rf_model, training, testing)
 
-cart_pred <- predict(fit.cart, testing)
-cart_accuracy <- round(sum(cart_pred == testing$Attack) / length(cart_pred)* 100, 2)
+# Red Neuronal
+#start_time <- Sys.time()
+#nn_model <- nnet(Attack ~ ., data = training, size = 5, maxit = 100)
+#nn_results <- calculate_accuracy_time(nn_model, training, testing)
 
-# cálculo de KNN predictor.
+# Support Vector Machine
+start_time <- Sys.time()
+svm_model <- svm(Attack ~ ., data = training)
+svm_results <- calculate_accuracy_time(svm_model, training, testing)
+
+# CART (Classification and Regression Trees)
+start_time <- Sys.time()
+fit.cart <- train(Attack ~ ., data = training, method = "rpart", metric = metric, trControl = control)
+cart_results <- calculate_accuracy_time(fit.cart, training, testing)
+
+# KNN (K-Nearest Neighbors)
 start_time <- Sys.time()
 knn_model <- knn(train = training_num, test = testing[, 1:13], cl = training$Attack, k = 5)
 end_time <- Sys.time()
-elapsed_time_knn <- end_time - start_time
-#knn_pred <- predict(knn_model, testing)
+elapsed_time_knn <- round((end_time - start_time), 2)
 knn_accuracy <- round(sum(knn_model == testing$Attack) / length(knn_model) * 100, 2)
+knn_results <- list(accuracy = knn_accuracy, elapsed_time = elapsed_time_knn)
+cm_model <- confusionMatrix(knn_model, testing$Attack)
+knn_results <- list(accuracy = round(cm_model$overall[1], 4)*100, 
+                     cm_kappa= round(cm_model$overall[2], 4)*100, elapsed_time = elapsed_time_knn )
+heatmap(cm_model$table)
 
-# Entrenar el modelo de Random Forest
-start_time <- Sys.time()
-rf_model <- randomForest(Attack ~ ., data = training, ntree = 100)
-end_time <- Sys.time()
-elapsed_time_rf <- end_time - start_time
-rf_pred <- predict(rf_model, testing)
-rf_accuracy <- round(sum(rf_pred == testing$Attack) / length(rf_pred)* 100, 2)
-
-# Entrenar el modelo de Red Neuronal
-start_time <- Sys.time()
-nn_model <- nnet(Attack ~ ., data = training, size = 5, maxit = 100)
-end_time <- Sys.time()
-elapsed_time_nn <- end_time - start_time
-nn_pred <- predict(nn_model, testing, type = "class")
-nn_accuracy <- round(sum(nn_pred == testing$Attack) / length(nn_pred)* 100, 2)
-
-# Entrenar el modelo de Support Vector Machine
-start_time <- Sys.time()
-svm_model <- svm(Attack ~ ., data = training)
-end_time <- Sys.time()
-elapsed_time_svm <- end_time - start_time
-svm_pred <- predict(svm_model, testing)
-svm_accuracy <- round(sum(svm_pred == testing$Attack) / length(svm_pred)* 100, 2)
-
-# Entrenar el modelo Naive Bayes
+# Naive Bayes
 start_time <- Sys.time()
 nb_model <- naiveBayes(Attack ~ ., data = training)
-end_time <- Sys.time()
-elapsed_time_nb <- end_time - start_time
-nb_pred <- predict(nb_model, testing, type = "class")
-nb_accuracy <- round(sum(nb_pred == testing$Attack) / length(nb_pred)* 100, 2)
+nb_results <- calculate_accuracy_time(nb_model, training, testing)
 
-results <- data.frame(Modelo = c("Random Forest", "Support Vector Machine", "Red Neuronal", "CART", "KNN", "Naive"),
-                      Precisión = c(rf_accuracy, svm_accuracy, nn_accuracy, cart_accuracy, knn_accuracy, nb_accuracy),
-                      Tiempo =c(elapsed_time_rf, elapsed_time_svm, elapsed_time_nn, elapsed_time_cart, elapsed_time_knn, elapsed_time_nb))
+# Resultados
+results <- data.frame(Modelo = c("Random Forest", "Support Vector Machine", "CART", "K-NearestN", "Naive Bayes"),
+                      Accuracy = c(rf_results$accuracy, svm_results$accuracy,
+                                    cart_results$accuracy, knn_results$accuracy, nb_results$accuracy),
+                      Kappa = c(rf_results$cm_kappa, svm_results$cm_kappa,
+                                    cart_results$cm_kappa, knn_results$cm_kappa, nb_results$cm_kappa),
+                      Tiempo = c(rf_results$elapsed_time, svm_results$elapsed_time, 
+                                 cart_results$elapsed_time, knn_results$elapsed_time, nb_results$elapsed_time))
+
 print(results)
-
-cm_rf <- confusionMatrix(rf_pred, testing$Attack)
-heatmap(cm_rf$table)
-
-#stopImplicitCluster(cl)
+knitr::kable(results, caption = "Resultados por métodos de Clasificación") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"))
 ```
 
-## Entrenamiento con Random Forest Final
-```{r 2_4_tunning_RF_model_tests, echo=FALSE}
-rf_trees_fin <- 200
+### Entrenamiento con Random Forest Final
+```{r 2_4_tunning_RF_model_tests, echo=FALSE, cache=TRUE}
+rf_trees_fin <- rf_trees #200
 part_fin <- 0.5 
+set.seed(123)
 
 # Añadir columna "Anomaly" al dataset data1
 data1$Anomaly <- ifelse(data1$Attack == "normal.", FALSE, TRUE)
 data1$Anomaly <- as.factor(data1$Anomaly)
+
 data1$Attack <- as.factor(data1$Attack)
 
 # Prepara la división entre training y testing
-set.seed(123)
 inTrain_fin <- createDataPartition(y=data1$Attack, p=part_fin, list=FALSE)
 training_fin <- data1[inTrain_fin,]
 testing_fin <- data1[-inTrain_fin,]
@@ -595,24 +602,22 @@ rf_fin_model <- randomForest(Attack ~ .,
                           rfeControl=control,
                           ntree = rf_trees_fin)
 end_time <- Sys.time()
-elapsed_time_fin <- end_time - start_time
+elapsed_time_fin <- round((end_time - start_time), 2)
 rf_fin_pred <- predict(rf_fin_model, testing_fin)
-#rf_fin_accuracy <- round((sum(rf_fin_pred == testing_fin$Attack) / length(rf_fin_pred))*100, 2)
+
+cm_fin <- confusionMatrix(rf_fin_pred, testing_fin$Attack)
 
 predictors(rf_fin_model)
 plot(rf_fin_model)
-
-cm_fin <- confusionMatrix(rf_fin_pred, testing_fin$Attack)
 heatmap(cm_fin$table)
 
 rf_fin_accuracy <- round(cm_fin$overall[1], 4)*100
 rf_fin_kappa <- round(cm_fin$overall[2], 4)*100
 resultado_final <- data.frame( Accuracy= as.numeric(rf_fin_accuracy),
                                Kappa= as.numeric(rf_fin_kappa),
-                               Tiempo= as.numeric(round(elapsed_time_fin, 2)))
+                               Tiempo= as.numeric(elapsed_time_fin))
 
 print(resultado_final)
-#table(valid$match)
 
 # Crear una nueva columna "match" en la tabla valid
 valid <- testing_fin %>%
@@ -644,8 +649,6 @@ tabla_fin <- tabla_fin %>%
 
 # Mostrar la tabla tabla_fin actualizada
 print(tabla_fin)
-
-
 ```
 
 # EDA: Esta sección es para completar el estudio de los datos y sus relaciones
@@ -658,11 +661,11 @@ U2R: unauthorized access to local superuser (root) privileges, e.g., various ``b
 probing: surveillance and other probing, e.g., port scanning.
 
 # Observación: DstHostSameSrcPortRate tiene un ligero efecto en el tipo de intrusión, para "DstHostSameSrcPortRate" mayor a igual a 1 puede ser "probe" de "r2l"
-```{r 3_1_eda1, echo=TRUE}
+```{r 3_1_eda1, echo=TRUE, cache=TRUE}
 qplot(DstHostSameSrvRate,DstHostSrvCount,colour=Attack,data=data)
 ```
 Plot mean attack duration and median attack duration.
-```{r}
+```{r, cache=TRUE}
 ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$Attack)) + 
   geom_bar(stat = "summary", fun.y = "mean")+scale_x_discrete(name = "Attack")+
   scale_y_continuous("Duration")+labs(title="Mean attack duration", fill=("Attack\n") )
@@ -678,17 +681,17 @@ Note that, a Probing attack, which should get as much information as possible ab
 While, only the User to Root attack (u2r) has a very high median. In fact, the durations of this attack are comparable to each other, while this does not happen for other types of attacks that have very variable duration between them.
 
 Plot average duration of attacks based on the type of protocol.
-```{r}
+```{r, cache=TRUE}
 ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$ProtocolType)) + 
   geom_bar(stat = "summary", fun.y = "mean")+scale_x_discrete(name = "Attack")+
   scale_y_continuous("Duration")+ scale_fill_discrete(name = "Protocol type\n")+
   labs(title="Average duration of attacks based on the type of protocol" )
 ```
 
-As can be seen from the graph, the types of attacks reflect the average duration based on the type of protocol. In fact, many attacks use the TCP protocol that is widely used to implement different services. The wide use of the UDP protocol in the normal case is strange, but depends on the type of user service requests.
+Como se puede observar en el gráfico, los tipos de ataques reflejan la duración promedio basada en el tipo de protocolo. De hecho, muchos ataques utilizan el protocolo TCP que se utiliza ampliamente para implementar diferentes servicios. El uso extensivo del protocolo UDP en casos normales es extraño, pero depende del tipo de solicitudes de servicio del usuario.
 
-Individual observations using duration, attack and protocol type.
-```{r}
+Observaciones individuales usando 'Duration', 'Attack' y 'protocol type'.
+```{r, cache=TRUE}
 p1 <- ggplot(data,aes(y = data$Duration, x = data$Attack)) +
   geom_point()
 p1 +  geom_point(aes(color=data$ProtocolType))+
@@ -697,48 +700,68 @@ p1 +  geom_point(aes(color=data$ProtocolType))+
   scale_y_discrete("Duration")
 ```
 
-# Observatioó: "Flag" es un buen predictor. Flag= "REG" y "S0" es tipo "DoS"
-```{r eda2, echo=TRUE}
+# Observatión: "Flag" es un buen predictor. Flag= "REG" y "S0" es tipo "DoS"
+```{r eda2, echo=TRUE, cache=TRUE}
 qplot(Service,Flag,colour=Attack,data=data)
 ```
 
 # Observación: Para duración mayor hay de 30000 se puede ver un 'probe', la duración misma es un fuerte predictor
-```{r eda3, echo=TRUE}
+```{r eda3, echo=TRUE, cache=TRUE}
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
 # Observación: Para duración mayor 30000 puede ser un 'probe'
 # Observación: ProtocolType "tcp" tiene "DOS" tipo de intrusion. Es un fuerte predictor del tipo "DoS".
-```{r eda4, echo=TRUE}
+```{r eda4, echo=TRUE, cache=TRUE}
 qplot(Service,ProtocolType,colour=Attack,data=data)
 ```
 
 # Observación: No hay una clara identificación
-```{r eda5, echo=TRUE}
+```{r eda5, echo=TRUE, cache=TRUE}
 qplot(Flag,Land,colour=Attack,data=data)
 ```
 
 # Observación: Para SerrorRate y SrvSerrorRate=0 or 1 es tipo "Dos" y SerrorRate entre 0.25 a 0.5 es un "probe""
-```{r eda6, echo=TRUE}
+```{r eda6, echo=TRUE, cache=TRUE}
 qplot(SerrorRate,SrvSerrorRate,colour=Attack,data=data)
 ```
 
 # Observación: para duración mayor de 30000 puede ser un 'probe'
-```{r eda7, echo=TRUE}
+```{r eda7, echo=TRUE, cache=TRUE}
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
 # Resultado: claramente Flag is un potente predictor para incrusiones de tipo "DoS"
-```{r eda8, echo=TRUE}
+```{r eda8, echo=TRUE, cache=TRUE}
 A=table(data$Flag,data$Attack)
 round(prop.table(A)*100,1)
 ```
 
-# Enriquecemos el Dataset
-```{r 3_2_add_standard, echo=FALSE}
-data <- read.csv("Book2.csv",header=T)
+# Enriquecemos el Dataset con: las tácticas de ATT&CK y las variables relacionadas con su ID según estándard MITRE y el ID de CWE
+```{r 3_2_add_standard, echo=FALSE, cache=TRUE}
 
-# Definir las tácticas de ATT&CK y las variables relacionadas con su ID según MITRE y CWE
+#### 1. carga limpio el Dataset
+data <- read.csv("Book2.csv",header=T)
+data_r <- data
+
+#### 2. me quedo solo con las variables numéricas en nuevo data_r
+numeric_cols <- sapply(data_r, is.numeric)
+data_r <- data_r[, numeric_cols == TRUE] 
+# elimino variables con Varianza zero y nzv, #eliminará la variable NumOutboundCmds
+variance <- nearZeroVar(data_r, saveMetrics = T)
+data_r <- data_r[, !(variance$zeroVar | variance$nzv)]
+# Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
+data_r$SrcBytes <- data$SrcBytes
+
+#### 3. columna con alta correlación entre ellas, se pueden eliminar
+columns_to_remove <- c("DstHostSameSrvRate", "DstHostSrvRerrorRate", "DstHostRerrorRate", "RerrorRate", "DstHostSrvSerrorRate", "DstHostSerrorRate", "SrvSerrorRate")
+data_r <- data_r[, setdiff(names(data_r), columns_to_remove)]
+
+#### 4. Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
+data_r$SrcBytes <- data$SrcBytes
+data_r$Attack <- as.factor(data$Attack)
+
+#### 5. Definir las tácticas de ATT&CK y las variables relacionadas con su ID según estándard MITRE y CWE
 tacticas_attck <- list(
   "Reconnaissance" = list(c("nmap.", "satan.", "mscan.", "snmpgetattack.", "named.", "ipsweep.", "xsnoop", "xclock.", "saint.","snmpguess.","portsweep"), "T0497", "CWE-200"),
   "Delivery" = list(c("smurf.", "neptune.", "teardrop."), "T1496", "CWE-693"),
@@ -769,20 +792,20 @@ clasificar_tactica_attck <- function(registro) {
 }
 
 # Aplicar la clasificación a cada registro del dataset y añadir los IDs correspondientes
-resultados <- t(sapply(as.character(data$Attack), clasificar_tactica_attck))
+resultados <- t(sapply(as.character(data_r$Attack), clasificar_tactica_attck))
 colnames(resultados) <- c("Tactica", "ID_Tactic", "ID_CWE")
 
 # Unir los resultados al dataset original
-data <- cbind(data, as.data.frame(resultados))
-data$Tactica <- as.character(data$Tactica)
-data$ID_Tactic <- as.character(data$ID_Tactic)
-data$ID_CWE <- as.character(data$ID_CWE)
-data$Attack <- as.factor(data$Attack)
+data_r <- cbind(data_r, as.data.frame(resultados))
+data_r$Tactica <- as.character(data_r$Tactica)
+data_r$ID_Tactic <- as.character(data_r$ID_Tactic)
+data_r$ID_CWE <- as.character(data_r$ID_CWE)
+data_r$Attack <- as.factor(data_r$Attack)
 #glimpse(data)
 #any(!complete.cases(data))
 
 # Mostrar los valores de Attack que no han podido ser clasificados
-unclassified_attacks <- data$Attack[data$Tactica == "Unknown"]
+unclassified_attacks <- data_r$Attack[data_r$Tactica == "Unknown"]
 
 if (length(unclassified_attacks) > 0) {
   cat("Valores de Attack no clasificados:\n")
@@ -802,44 +825,87 @@ if (length(unclassified_attacks) > 0) {
 }
 ```
 
-revisar por innecesario
-#```{r simple_validation, echo=FALSE}
-valid <- testing
-valid$Attack <- as.character(valid$Attack)
-valid$pred <- as.character(pred)
-valid$match <- valid$Attack == valid$pred
+# Fase de testeo de la eficacia de las nuevas variables.
 
-# Calcular eficacia
-df <- table(valid$match)
-ok <- sum(valid$match) / nrow(valid) * 100
+```{r 2_6_tunning_RF_model_group_tests, echo=FALSE, cache=TRUE}
+rf_trees_fin <- rf_trees #200
+part_fin <- 0.5 
+set.seed(123)
 
-valid_ori <- testing_original
-valid_ori$Attack <- as.character(valid_ori$Attack)
-valid_ori$pred <- as.character(pred_ori)
-valid_ori$match <- valid_ori$Attack == valid_ori$pred
+data_r$Tactica <- as.factor(data_r$Tactica)
 
-df_ori <- table(valid_ori$match)
-ok_ori <- sum(valid_ori$match) / nrow(valid_ori) * 100
+# Añadir columna "Anomaly" al dataset data1
+#data_r$Anomaly <- ifelse(data_r$Attack == "normal.", FALSE, TRUE)
+#data_r$Anomaly <- as.factor(data_r$Anomaly)
+#data_r$Attack <- as.factor(data_r$Attack)
 
-valid_pdf <- testing_pdf
-valid_pdf$Attack <- as.character(valid_pdf$Attack)
-valid_pdf$pred <- as.character(pred_pdf)
-valid_pdf$match <- valid_pdf$Attack == valid_pdf$pred
+# Prepara la división entre training y testing
+inTrain_fin <- createDataPartition(y=data_r$Tactica, p=part_fin, list=FALSE)
+training_fin <- data_r[inTrain_fin,]
+testing_fin <- data_r[-inTrain_fin,]
+prop.table(table(training_fin$Tactica))
+prop.table(table(testing_fin$Tactica))
 
-df_pdf <- table(valid_pdf$match)
-ok_pdf <- sum(valid_pdf$match) / nrow(valid_pdf) * 100
+# Entrenar el modelo de Random Forest
+control <- rfeControl(functions=rfFuncs, method="cv", number=10)
 
-valid_teo <- testing_teorico
-valid_teo$Attack <- as.character(valid_teo$Attack)
-valid_teo$pred <- as.character(pred_teo)
-valid_teo$match <- valid_teo$Attack == valid_teo$pred
+start_time <- Sys.time()
+rf_fin_model <- randomForest(Tactica ~ ., 
+                          data = training_fin,
+                          mtry = 5,
+                          importance = TRUE,
+                          rfeControl=control,
+                          ntree = rf_trees_fin)
+end_time <- Sys.time()
+elapsed_time_fin <- round((end_time - start_time), 2)
+rf_fin_pred <- predict(rf_fin_model, testing_fin)
 
-df_teo <- table(valid_teo$match)
-ok_teo <- sum(valid_teo$match) / nrow(valid_teo) * 100
-#```
+cm_fin <- confusionMatrix(rf_fin_pred, testing_fin$Tactica)
 
-# Fase de testeo de la eficacia de los diferentes modelos
-Conclusión nos quedamos con Random Forest
+predictors(rf_fin_model)
+plot(rf_fin_model)
+heatmap(cm_fin$table)
+
+rf_fin_accuracy <- round(cm_fin$overall[1], 4)*100
+rf_fin_kappa <- round(cm_fin$overall[2], 4)*100
+resultado_final <- data.frame( Accuracy= as.numeric(rf_fin_accuracy),
+                               Kappa= as.numeric(rf_fin_kappa),
+                               Tiempo= as.numeric(elapsed_time_fin))
+
+print(resultado_final)
+
+# Crear una nueva columna "match" en la tabla valid
+valid <- testing_fin %>%
+  mutate(Attack = as.character(Tactica),
+         pred = as.character(rf_fin_pred),
+         match = Attack == pred)
+
+# Calcular el número total de registros por variable Attack
+total_per_attack <- table(valid$Tactica)
+
+# Calcular el número de aciertos por variable Attack
+aciertos_per_attack <- tapply(valid$match, valid$Tactica, function(x) sum(x))
+
+# Calcular el número de fallos por variable Attack
+fallos_per_attack <- total_per_attack - aciertos_per_attack
+
+# Calcular el Accuracy por variable Attack
+accuracy_per_attack <- round((aciertos_per_attack / total_per_attack *100), 2)
+
+# Crear la tabla tabla_fin con fallos, aciertos y Accuracy por variable Attack
+tabla_fin <- data.frame(Attack = names(total_per_attack),
+                        Aciertos = as.integer(aciertos_per_attack),
+                        Fallos = as.integer(fallos_per_attack),
+                        Accuracy = as.numeric(accuracy_per_attack))
+
+# Ordenar la tabla_fin por Accuracy y Total Aciertos
+tabla_fin <- tabla_fin %>%
+  arrange(desc(Accuracy), desc(Aciertos))
+
+# Mostrar la tabla tabla_fin actualizada
+print(tabla_fin)
+```
+
 
 
 
