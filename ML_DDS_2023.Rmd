@@ -1,6 +1,6 @@
 ---
-title: "Práctica Final en Data Driven Security"
-author: "Grup CC: Toni Jordan Y Joan Dalmau"
+title: "Práctica Final en Data Driven Security (Master Cybersecurity n.16)"
+author: "Grup CC: Toni Jordan y Joan Dalmau"
 date: "Junio de 2023"
 output:
   html_document:
@@ -14,7 +14,7 @@ output:
     theme: spacelab
 ---
 
-```{r setup, results='hide'}
+```{r setup, results='hide', include=FALSE, message=FALSE, warning=FALSE, cache=TRUE}
 # Opciones de configuración de knitr
 options(knitr.kable.NA = '')
 options(knitr.table.format = "html")
@@ -27,7 +27,7 @@ library(randomForest) #RandomForest
 library(nnet)         #Neuronal
 library(e1071)        #Naive Bayes
 library(dplyr)
-library(ggplot2)
+library(ggplot2)      #gráficos
 library(doParallel)   #paralelizacion
 library(corrplot)
 library(class)
@@ -36,6 +36,7 @@ library(knitr)
 library(kableExtra)
 library(foreach)      #paralelizacion
 library(grid)
+library(DataExplorer)
 
 #Constantes utilizadas en el programa
 rf_trees <- 200    #número máximo de arboles para RandomForest Final
@@ -44,53 +45,57 @@ limite <- 30       #número mínimo de muestras para considerar el mantener una 
 
 # Objetivo
 
-El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset KDD CUP 99 para determinar cuál es el mejor conjunto de variables que podemos usar en un entrenamiento de Machine Learning de clasificación y finalmente conseguir un juego de datos y modelo de entrenamiento que mejore el valor obtenido por el script del enunciado.
-
+El objetivo de esta práctica es realizar un estudio de un subconjunto del Dataset KDD CUP 99 y determinar el mejor conjunto de variables para utilizar en un modelo de Machine Learning de clasificación.
 Para llevar a cabo este estudio, se dispone de dos archivos de datos con incidencias etiquetadas, una codificación de ejemplo en R, información sobre los estándares Mitre de ATT&CK y unas primeras conclusiones sobre los datos.
 
 ## Packages
 En esta práctica se utilizarán los siguientes paquetes de R:
 
-```{r load_packages, message=FALSE, warning=FALSE, results='hide'}
+```{r load_packages, cache=TRUE}
 mypackages <- c("randomForest", "nnet", "readr", "caret", "e1071","dplyr","ggplot2", "doParallel","data.table", "kableExtra","corplot","class", "knitr", "tidyr", "grid")
 
 # Crear un data.table con los paquetes
 pa<-data.table(mypackages)
 
 # Dividir el data.table en tres partes
-cc<-as.integer(length(mypackages)/3)
-pa1<-pa[1:cc]
-pa2<- pa[(cc+1):(2*cc)]
-pa3<- pa[(2*cc+1):length(mypackages)]
+colnames(pa)<-c("")
+
+pa <- split(pa, rep(1:4, length.out = nrow(pa)))
+
+kable(pa, caption = " Paquetes a Instalar:",align = c('c'),label = NA) %>%
+  kable_styling(bootstrap_options = c("striped", "bordered"),full_width = FALSE) 
 ```
 
-```{r pack, message=FALSE, warning=FALSE}
-kable(list(pa1, pa2, pa3),col.names = NULL, caption = "Necesarios:") %>%
-    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
-```
 ## Esquema argumental del documento:
+
+El documento se divide en varias secciones:
+
+Análisis y preprocesamiento de los conjuntos de datos: Esta sección carga los conjuntos de datos "Dataset Global" y "Dataset Muestra" y realiza un análisis exploratorio para comprender su estructura y contenido. También se realiza un preprocesamiento de los datos para asegurarse de que sean adecuados para su uso en el entrenamiento con modelos de Machine Learning.
+
+Selector de variables: En esta sección se implementa un selector de variables utilizando el algoritmo de Random Forest. Se comparan diferentes modelos de Machine Learning utilizando diferentes conjuntos de variables y se optimiza el modelo seleccionando el mejor conjunto de variables.
+
+Propuestas de Mejora de la información y de Valor añadido: En esta sección se realizan estudios exploratorios de las variables y se agrega información adicional a los datos utilizando los estándares Mitre ATT&CK y CWE.  
 
 ### Validación y pre-porcesado del "Dataset Muestra" respecto al "Dataset Global" entregado  {-}
 - Estudio del Dataset Muestra y su contenido  
-- Validación de duplicados en el Dataset Muestra  
-- Validación de proporciones de la variable "Attack" en el Dataset Muestra  
-- Posibilidad de aumentar el número de muestras con el Dataset Global  
-- Tratamiento de variables con bajas muestras  
+- Validación de los duplicados en el Dataset Muestra  
+- Validación de las proporciones de la variable "Attack" en el Dataset Muestra y posibilidad de aumentar el número de muestras con el Dataset Global  
+- Tratamiento de las variables con muy bajas muestras  
 
-### Selector de variables  {-}
-- Criterios de selección y competividad de los precursores con Random Forest  
-- Comparativa de diferentes modelos de Machine Learning  
+### Selector de variables, o Feature Engineering  {-}
+- Criterios de selección y prueba de competencia de conjuntos de precursores ante el modelo Random Forest  
+- Comparativa de los diferentes modelos Machine Learning de clasificación 
 - Optimización del modelo de Machine Learning y conclusiones  
 
 ### Mejora de la información y valor añadido  {-}
-- Estudios EDA de las variables  
-- Información agregada MITRE ATT&CK y CWE  
+- Estudios EDA de las variables del DATASET original
+- Mejora y Valor Añadido. Información agregada con estándares MITRE ATT&CK y CWE  
 
 # Análisis y preprocesamiento de los conjuntos de datos  
 
-En esta sección, se realizará un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". Además, se llevará a cabo un preprocesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de Machine Learning.  
+En esta sección, se realizará un análisis exploratorio de los conjuntos de datos "Dataset Global" y "Dataset Muestra". Además, se llevará a cabo un pre procesamiento de los datos para asegurarnos de que sean adecuados para su uso en el entrenamiento de modelos de Machine Learning.  
 
-## Carga de los conjuntos de datos  
+## Data Loading: carga de los conjuntos de datos  
 
 Comenzamos cargando los conjuntos de datos "Dataset Global" y "Dataset Muestra" en R.  
 
@@ -103,11 +108,13 @@ data_full <- read_csv("Book1.csv",
 data <- read.csv("Book2.csv", header=T)
 ```
 
-### Exploración de los conjuntos de datos  
+### Data Exploration: exploración de los conjuntos de datos  
 
-A continuación, realizaremos un análisis exploratorio de los conjuntos de datos para comprender su estructura y contenido.  
+El Análisis Exploratorio de Datos (EDA, por sus siglas en inglés) es la fase inicial y importante del análisis de datos/modelado predictivo. Durante este proceso, se da un primer vistazo a los datos y se generar hipótesis relevantes y decidirán los siguientes pasos. 
 
-```{r explore_data, eval=TRUE, cache=TRUE}
+A continuación, realizaremos un análisis exploratorio de los conjuntos de datos entregados en la prática para comprender su estructura y contenido.  
+
+```{r explore_data, cache=TRUE}
 # Visualizar las primeras filas del Dataset Global
 head(data_full)
 
@@ -115,19 +122,9 @@ head(data_full)
 head(data)
 ```
 
-El conjunto de datos "Dataset Global" contiene las siguientes columnas: SrcBytes, DstBytes, Land, WrongFragment, Urgent, Hot y NumFailedLogin.... Cada fila representa un incidente.  
+El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conjunto de datos "Dataset Global" y Cada fila representa un incidente y tampoco contiene muestras vacías, luego se podrá utilizará para nuestro estudio.  
 
-El conjunto de datos "Dataset Muestra" contiene las mismas columnas que el conjunto de datos "Dataset Global" y se utiliza como una muestra de incidencias para nuestro estudio.  
-
-### Validación y preprocesamiento del conjunto de datos de muestra  
-
-En esta sección, se realizarán algunas validaciones y preprocesamientos en el conjunto de datos de muestra para asegurarnos de que cumpla con nuestros requisitos.  
-
-#### Estudio del conjunto de datos de muestra y su contenido  {-}
-
-A continuación, se realizará un estudio más detallado del conjunto de datos de muestra y su contenido.  
-
-```{r study_sample_data, echo=TRUE, eval=FALSE, results='hide', class.source = 'fold-show'}
+```{r study_sample_data_1, echo=TRUE, eval=FALSE, results='hide', class.source = 'fold-show'}
 # Resumen del conjunto de datos de muestra
 summary(data)
 
@@ -136,25 +133,36 @@ str(data)
 
 dim(data)
 ```
+El conjunto de Datos Muestra tiene **`r nrow(data)`** filas y **`r ncol(data)`** columnas. Se distribuyen en los siguientes tipos:
+```{r study_sample_data_2, eval=TRUE, echo=TRUE, fig.align='center', class.source = 'fold-show'}
+DataExplorer::plot_str(data)
+```
 
-El conjunto de datos de muestra tiene **`r nrow(data)`** filas y **`r ncol(data)`** columnas. Se distribuyen en los siguientes tipos:
+### Data Preprocessing: validación y preprocesamiento del conjunto de datos de muestra  
 
-```{r 0_study_data, cache=TRUE}
+En esta sección, se realizarán algunas validaciones y preprocesamientos en el conjunto de datos Muestra para asegurarnos de que cumpla con nuestros requisitos.  
+
+#### Estudio del conjunto de datos de muestra y su contenido  {-}
+
+A continuación, se realizará un estudio más detallado del conjunto de datos Muestra y su contenido.  
+
+```{r study_data_1, cache=TRUE}
 # Contar el número de variables cualitativas, cuantitativas y factor
 num_qualitative <- sum(sapply(data, is.character))
 num_quantitative <- sum(sapply(data, is.numeric))
 num_factor <- sum(sapply(data, is.factor))
-  
+
 # Crear una tabla resumen
 summary_table <- data.frame(Tipo = c("Cualitativa", "Cuantitativa", "Factor"),
                             Numero = c(num_qualitative, num_quantitative, num_factor))
-
+  
 # Imprimir la tabla resumen usando la función knitr::kable()
 kable(summary_table, caption = "Clasificación por tipos de Variables") %>%
     kable_styling(bootstrap_options = c("striped"), full_width = F)
 ```
-Contiene **`r summary_table$Numero[2]`** variable numéricas cuantitativas y **`r summary_table$Numero[1]`** variables cualitativas.  
-```{r 0c_study_data, results='hide', cache=TRUE}
+
+- El Dataset contiene **`r summary_table$Numero[2]`** variable numéricas cuantitativas y **`r summary_table$Numero[1]`** variables cualitativas.    
+```{r study_data_2, results='hide', cache=TRUE}
 # Obtener solo las variables cualitativas y los valores de estas
 qualitative_vars <- select_if(data, is.character)
 distinct_values <- lapply(qualitative_vars, unique)
@@ -175,14 +183,14 @@ for (i in 1:length(distinct_values)) {
 summary_table2 <- summary_table2 %>% arrange(Variable)
 ```
 
-Las columnas cualitativas son: **`r llista`** que representa la variable factor.  
+- Las columnas con variables cualitativas son: `r llista` que contendrá la variable usada como Factor.  
 
-```{r 0d1_study_data, cache=TRUE}
+```{r study_data_3, cache=TRUE}
 # Imprimir la tabla resumen
 kable(summary_table2, caption = "Clasificación por Variables cualitativa") %>%
     kable_styling(bootstrap_options = c("striped", "condensed"))
 ```
-```{r 0d2_study_data, results='hide', fig.align='center', fig.cap='Variables Cualitativas', cache=TRUE}
+```{r study_data_4, results='hide', fig.align='center', fig.cap='Variables Cualitativas', cache=TRUE}
 # Crear un gráfico explicativo por cada variable cualitativa
 num_variables <- nrow(summary_table2)
 num_rows <- 2  # Número de filas en la matriz de gráficos
@@ -204,18 +212,12 @@ for (i in 1:num_variables) {
 layout(1)
 ```
 
-### Validación de duplicados en el conjunto de datos de muestra
+### Feature Engineering: 
+
+#### Validación de duplicados en el conjunto de datos de muestra
 
 Vamos a validar si el conjunto de datos de la muestra contiene filas duplicadas y, en caso afirmativo, eliminaremos las filas duplicadas.
-```{r 1b_study_data, results='hide', cache=TRUE}
-# Calcular el número de muestras duplicadas o iguales en el Dataset
-duplicates <- data %>%
-  group_by_all() %>%
-  filter(n() > 1) %>%
-  summarise(Num_Duplicates = n()) %>%
-  arrange(desc(Num_Duplicates))
-```
-```{r 1bb_study_data, eval=FALSE, echo=TRUE, cache=TRUE, class.source = 'fold-show'}
+```{r dup_study_data_1, echo=TRUE, cache=TRUE, class.source = 'fold-show', message=FALSE}
 # Calcular el número de muestras duplicadas o iguales en el Dataset
 duplicates <- data %>%
   group_by_all() %>%
@@ -224,7 +226,7 @@ duplicates <- data %>%
   arrange(desc(Num_Duplicates))
 ```
 
-```{r 0b3_study_data, cache=TRUE}
+```{r dup_study_data_2, cache=TRUE}
 # Imprimir la tabla ordenada
 cat("Número de muestras duplicadas en Dataset:", nrow(duplicates), "\n")
 # Eliminar las muestras duplicadas y conservar solo una muestra de ellas
@@ -235,28 +237,30 @@ duplicates <- nrow(data) - nrow(kdd_data_unique)
 cat("Número de muestras duplicadas eliminadas:", duplicates, "\n")
 rm(kdd_data_unique) #eliminamos dataset temporal
 ```
-Se confirma que el DATASET de trabajo es correcto y no tiene muestras duplicadas.
-```{r 2a_study_data, cache=TRUE}
+> **Se confirma que el DATASET de trabajo es correcto y no tiene muestras duplicadas.**  
+
+```{r per_study_data_1, cache=TRUE}
 # Constantes: valor extremo de la diferencia de porcetage permitido XX% y cantidad mínima de muestras
 difer_n <- 3
 cant_min <- 1000
 ```
-### Con el siguiente estudio se pretende analizaa el Dataset Muestra y el Dataset Global 
-El objetivo es ver si podemos añadir muestras en el Dataset Global para mejorar el Dataset de trabajo, para ello se observa si hay muestras diferentes que podamos extraer de aquellos tipos de ataque con un número inferior a **`r cant_min `** muestras en el Dataset de trabajo.  
+#### Con el siguiente estudio se pretende analizar y comparar el **Dataset Muestra** y el **Dataset Global**  
 
-Eliminamos filas duplicados dejando filas únicas en el DATASET FULL y comparamos los dos juegos de datos:  
-```{r 2b_study_data, echo=TRUE, cache=TRUE, class.source = 'fold-show'}
+El objetivo aquí seria validar si podemos añadir mas muestras del **Dataset Global** para mejorar el **Dataset Muestra**, para ello se observa si hay muestras diferentes que podamos extraer de aquellos tipos de ataque con un número inferior a **`r cant_min `** muestras en el Dataset de trabajo.  
+
+Para ello, eliminamos filas duplicadas dejando solo filas únicas en el **Dataset Global** y comparamos los dos juegos de datos:  
+```{r per_study_data_2, echo=TRUE, cache=TRUE, class.source = 'fold-show'}
 # Eliminar las muestras duplicadas y conservar solo una muestra de ellas
 kdd_data_full_unique <- distinct(data_full, .keep_all = TRUE)
 ```
-```{r 2c_study_data, cache=TRUE}
+```{r per_study_data_3, cache=TRUE}
 # Calcular el número de muestras duplicadas eliminadas
 duplicates <- nrow(data_full) - nrow(kdd_data_full_unique)
 ```
-```{r 2d_study_data, echo=TRUE, cache=TRUE}
+```{r per_study_data_4, echo=TRUE, cache=TRUE}
 data_full <- kdd_data_full_unique
 ```
-```{r 2e_study_data, cache=TRUE}
+```{r per_study_data_5, cache=TRUE, fig.align='center'}
 rm(kdd_data_full_unique) #eliminamos el dataset temporal
 # Imprimir el número de muestras duplicadas eliminadas
 cat("Número de muestras duplicadas eliminadas en Dataset Full:", duplicates, "\n")
@@ -288,15 +292,7 @@ kable(attack_table, caption = "Comparativa número de attaques por cada Dataset"
 
 # Imprimir la tabla de casos con diferencia mayor al XX%
 cat("Número de nuevas muestras disponibles en Dataset Full:", nrow(filtered_attack_table_n), "\n")
-rm(data_full)  #eliminamos data_full, no es util
-```
 
-Con el siguiente estudio se concluye que el Dataset de trabajo es ya el Dataset Global filtrado y no es posible poblar el Dataset de trabajo con mas muestras, para ello se debería descargar nuevas muestras desde el repositorio:   
-
-- Source data [KDD Cup 1999 Data Data Set](https://archive.ics.uci.edu/ml/datasets/kdd+cup+1999+data)  
-
-- Finalmente se elimina el 'DataSet Full'.  
-```{r 3_study_data, fig.align='center', fig.cap='Comparativa Data_Full<>Data', cache=TRUE}
 # Crear un gráfico de barras comparativo
 ggplot(attack_table, aes(x = Attack)) +
   geom_bar(aes(y = n_Full, fill = "Data_Full"), stat = "identity", just = 0) +
@@ -307,8 +303,31 @@ ggplot(attack_table, aes(x = Attack)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-## Tratamiento de las muestras residuales
-```{r  4_study_data, fig.align='center', fig.cap='Agrupando variables residuales', out.width='50%', fig.show='hold', cache=TRUE}
+>Con el anterior estudio se concluye que el **Dataset Muestra** es ya el Dataset Global filtrado y por ello no es posible poblar el Dataset Muestra con mas muestras para éste trabajo. Para conseguirlo se debería probar a descargar nuevas muestras desde el repositorio:   
+>
+>- Source data [KDD Cup 1999 Data Data Set](https://archive.ics.uci.edu/ml/datasets/kdd+cup+1999+data), pero se aparcará para abordarlo en una prática con mas tiempo de entrega  
+>
+>- **Finalmente se elimina el 'DataSet Global' y se mantiene el Dataset Muestra original**.  
+
+```{r per_study_data_6, cache=TRUE, echo=TRUE, class.source = 'fold-show'} 
+rm(data_full) #eliminamos data_full, ya no es útil
+```
+
+### Selección y mejoras en el **Dataset Muestra**  
+
+La teoría nos dice que, aunque la creación de un buen modelo debe entenderse como un proceso iterativo, en el que se van ajustando y probando distintos modelos, existen ciertas pistas que pueden ayudar a realizar una selección inicial adecuada.
+
+Si dos variables numéricas están muy Correlacionadas, añaden información redundante al modelo, por lo tanto, no conviene incorporar ambas. Si esto ocurre, se puede: excluir aquella que, acorde al criterio del analista, no está realmente asociada con la variable respuesta; o combinarlas para recoger toda su información en una única nueva variable, por ejemplo, con un PCA.
+
+Si una variable tiene varianza igual o próxima a cero (su valor es el mismo o casi el mismo para todas las observaciones) añade al modelo más ruido que información, por lo que suele ser conveniente excluirla.
+
+Si alguno de los niveles de una variable cualitativa tiene muy pocas observaciones en comparación a los otros niveles, puede ocurrir que, durante la validación cruzada o bootstrapping, algunas particiones no contengan ninguna observación de dicha clase (Varianza cero), lo que puede dar lugar a errores. En estos casos, suele ser conveniente eliminar las observaciones del grupo minoritario (si es una variable multiclase), eliminar la variable (si solo tiene dos niveles) o asegurar que, en la creación de las particiones, se garantice que todos los grupos estén representados en cada una de ellas.
+
+#### Tratamiento de las muestras residuales  
+
+Procedemos a buscar los casos 'Attack' etiquetados con bajo número de muestras, menos de:  **`r limite`** y agruparlos en una nueva etiqueta 'other'  
+
+```{r res_study_data_1, results='hide', fig.align='center', out.width='50%', fig.show='hold', fig.cap='Agrupando muestras', cache=TRUE}
 # Crear un gráfico de barras del porcentaje de casos por valor de Attack sin agrupar
 ggplot(attack_counts, aes(x = reorder(Attack, -Percentage), y = Percentage)) +
   geom_bar(stat = "identity", fill = "blue") +
@@ -340,10 +359,6 @@ attack_table_final <- data.frame(
 )
 attack_table_final <- attack_table_final[order(attack_table_final$Total, decreasing = TRUE), ]
 
-# Imprimir la tabla comparativa
-kable(attack_table_final, caption = "Comparativa número de attaques nuevo Dataset") %>%
-    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
-
 # Crear un gráfico de barras del porcentaje de casos por valor de Attack una vez agrupado
 ggplot(attack_counts, aes(x = reorder(Attack, -Percentage), y = Percentage)) +
   geom_bar(stat = "identity", fill = "blue") +
@@ -352,37 +367,60 @@ ggplot(attack_counts, aes(x = reorder(Attack, -Percentage), y = Percentage)) +
        y = "Porcentaje de casos") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
-```{r 4b_study_data,}
-
+```{r res_study_data_2, cache=TRUE}
+# Imprimir la tabla comparativa
+kable(attack_table_final, caption = "Comparativa número de attaques del nuevo Dataset Muestra") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
 ```
 
-Aunque la creación de un buen modelo debe entenderse como un proceso iterativo, en el que se van ajustando y probando distintos modelos, existen ciertas pistas que pueden ayudar a realizar una selección inicial adecuada.
+#### Selección de Predictores, (PCA), para una primera iteración
 
-Si dos variables numéricas están muy correlacionadas, añaden información redundante al modelo, por lo tanto, no conviene incorporar ambas. Si esto ocurre, se puede: excluir aquella que, acorde al criterio del analista, no está realmente asociada con la variable respuesta; o combinarlas para recoger toda su información en una única nueva variable, por ejemplo, con un PCA.
+Sección de generación de los diferentes modelos de subset por conjuntos preseleccionado de variables.
 
-Si una variable tiene varianza igual o próxima a cero (su valor es el mismo o casi el mismo para todas las observaciones) añade al modelo más ruido que información, por lo que suele ser conveniente excluirla.
+#### Conjunto 1 por criterio Enunciado, en el enunciado de la práctica se han seleccionado las siguientes variables:  {-}
+- **SrcBytes**: Representa la cantidad de bytes de datos enviados desde la fuente al destino.
+- **DstBytes**: Representa la cantidad de bytes de datos enviados desde el destino a la fuente.
+- **Land**: Indica si la conexión es de/a la misma máquina/puerto.
+- **WrongFragment**: Representa el número de fragmentos "incorrectos".
+- **Urgent**: Indica el número de paquetes urgentes.
+- **SameSrvRate**: Representa el porcentaje de conexiones al mismo servicio.
+- **LoggedIn**: Indica si el usuario ha iniciado sesión o no.
+- **DstHostSameSrvRate**: Representa el porcentaje de conexiones al mismo servicio que la conexión actual en los últimos dos segundos.
+- **DstHostSrvCount**: Representa el número de conexiones al mismo servicio que la conexión actual en los últimos dos segundos.
+- **Flag**: Representa el estado de la conexión.
+- **Attack**: Representa la variable objetivo, indicando si la conexión es un ataque o no.
 
-Si alguno de los niveles de una variable cualitativa tiene muy pocas observaciones en comparación a los otros niveles, puede ocurrir que, durante la validación cruzada o bootstrapping, algunas particiones no contengan ninguna observación de dicha clase (varianza cero), lo que puede dar lugar a errores. En estos casos, suele ser conveniente eliminar las observaciones del grupo minoritario (si es una variable multiclase), eliminar la variable (si solo tiene dos niveles) o asegurar que, en la creación de las particiones, se garantice que todos los grupos estén representados en cada una de ellas.
+#### Conjunto 2 por criterio PDF ejmplo, conjuntamente con el enunciado se aporta un ejemplo en PDF de un anterior alumno donde se escogieron este otro conjunto de variables, aunque no conocemos su justificación:  {-}
+- **SrcBytes**: Representa la cantidad de bytes de datos enviados desde la fuente al destino.
+- **DstBytes**: Representa la cantidad de bytes de datos enviados desde el destino a la fuente.
+- **DstHostSameSrvRate**: Representa el porcentaje de conexiones al mismo servicio que la conexión actual en los últimos dos segundos.
+- **Count**: Esta variable cuenta la frecuencia de conexiones que se han realizado al mismo host durante un período de tiempo determinado.
+- **DstHostDiffSrvRate**: Representa el porcentaje de conexiones que tienen diferentes servicios en el mismo host destino en los últimos dos segundos.
+- **Attack**: Representa la variable objetivo, indicando si la conexión es un ataque o no.
 
-## Selección de Predictores, (PCA)
+#### Conjunto 3 por criterio Teórico, por algunas combinaciones de variables que podrían ser consideradas en el contexto de una práctica académica, (según fuente Google + ChatGPT 3):  {-}
+- **Protocol_type + Service + Flag**: Esta combinación de variables puede ser útil para capturar patrones específicos de ataques según el tipo de protocolo, el servicio de red y el estado de la conexión. Por ejemplo, ciertos tipos de ataques pueden estar asociados con protocolos específicos o servicios particulares.
+- **Duration + Src_bytes + Dst_bytes**: Estas variables pueden proporcionar información sobre la duración de la conexión y la cantidad de bytes transferidos tanto desde el origen como hacia el destino. La combinación de estas variables puede ayudar a identificar ataques de denegación de servicio o ataques que involucren una transferencia de datos inusualmente grande.
+- **Protocol_type + Service + Flag + Src_bytes + Dst_bytes**: Al combinar las variables anteriores con las variables adicionales relacionadas con el tipo de protocolo, el servicio y el estado de la conexión, se puede obtener una visión más completa de las características de las conexiones y aumentar la capacidad de detección de ataques específicos.
 
-Sección de carga de los diferentes modelos de subset por variables
-```{r 2_feature_selection, cache=TRUE}
+```{r feature_selection_1, cache=TRUE}
 # Enunciado de la práctica
 data1_original <- data[,c("SrcBytes", "DstBytes", "Land", "WrongFragment", "Urgent", "SameSrvRate", "LoggedIn",  "DstHostSameSrvRate", "DstHostSrvCount","Flag","Attack" )]
 data1_original$Attack <- as.factor(data1_original$Attack)
-# pdf de soporte
+# PDF de soporte
 data1_pdf <- data[,c("SrcBytes", "DstBytes", "DstHostSameSrvRate", "Count", "DstHostDiffSrvRate","Attack" )]
 data1_pdf$Attack <- as.factor(data1_pdf$Attack)
 # Criterio teórico de los expertos en Networking
-data1_teorico <- data[,c("SrcBytes", "DstBytes", "Land", "WrongFragment", "Urgent", "Hot","NumFailedLogin","Attack" )]
+data1_teorico <- data[,c("SrcBytes", "DstBytes", "Duration", "ProtocolType", "Service", "Flag", "Attack" )]
 data1_teorico$Attack <- as.factor(data1_teorico$Attack)
 ```
 
-### modulo de selección de las variables finales por criterios puramente estadísticos
-```{r 2_2_feature_selection, cache=TRUE}
-# 1. Criterio de la Varianza nula o cerca del cero
+#### Conjunto 4 por criterio matemático, usando una combinación de selección de las variables finales por criterios puramente estadísticos:  {-}
+Este criterio se basará en la eliminación de columnas sobrantes según dos rozamientos estadísticos:  
+- variables con una **Varianza cero** o muy cercana al cero  
+- variables con un alto índice de **Correlación** entre ellas (>0.90).  
+```{r feature_selection_2, cache=TRUE}
+# 1. Criterio de la Varianza nula o cerca del cero, columnas que se eliminan:
 # "SrcBytes", "DstBytes", "Count", "DstHostSameSrvRate", "DstHostDiffSrvRate", "DstHostSrvDiffHostRate", "LoggedIn","SrvCount", 
 # "SerrorRate", "SrvSerrorRate", "RerrorRate", "SrvRerrorRate", "DiffSrvRate","SrvDiffHostRate", "DstHostSrvCount", 
 # "DstHostSameSrcPortRate", "DstHostSerrorRate", "DstHostSrvSerrorRate", "DstHostRerrorRate", "DstHostSrvRerrorRate", "NumOutboundCmds" 
@@ -394,14 +432,13 @@ data1 <- data[, numeric_cols == TRUE]
 variance <- nearZeroVar(data1, saveMetrics = T)
 data1 <- data1[, !(variance$zeroVar | variance$nzv)]
 # Filtrar los valores de zeroVar y nzv
-#variance_filtered <- variance[!(variance$zeroVar | variance$nzv), ]
 variance_filtered <- variance[variance$zeroVar | variance$nzv, ]
 
 # Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
-data1$SrcBytes <- data$SrcBytes
+#data1$SrcBytes <- data$SrcBytes
 
 # Imprimir la tabla resumen
-kable(variance_filtered, caption = "Variables a eliminar por la baja Varianza") %>%
+kable(variance_filtered, caption = "Variables a eliminar por su baja Varianza") %>%
     kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
 
 # Buscamos variables correladas para eliminarlas
@@ -409,27 +446,36 @@ correlation <- cor(data1)
 highlyCorrelated <- findCorrelation(correlation, verbose=F, names=T)  #selecciona a partir del 0.9 de indice de correlación
 
 # Convertir highlyCorrelated en una única fila
-highlyCorrelated_row <- paste("variables a eliminar por correlación:", paste(highlyCorrelated, collapse = ", "))
-highlyCorrelated_row
+highlyCorrelated_row <- paste("Correlación:", paste(highlyCorrelated, collapse = ", "))
 
-corrplot(correlation, method="circle", na.label= '.')
+corrplot(correlation, method="circle", title="Variables con alta Correlación", na.label= '.')
 
 # Eliminamos filas 
 data1 <- data1[, setdiff(names(data1), highlyCorrelated)]
 
 # Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
-data1$SrcBytes <- data$SrcBytes
+#data1$SrcBytes <- data$SrcBytes
 # Añadir la variable factor "Attack" al dataset filtrado
 data1$Attack <- as.factor(data$Attack)
 ```
-#### Se toman los cuatro juegos de variables para generar cuatro nuevos dataset con los siguientes tamaños:  
 
-```{r 2_1bb_feature_selection, results='hide', cache=TRUE}
+- Estas son las variables a eliminar por su alta **`r highlyCorrelated_row`** que son eliminadas del Dataset  
+
+>Se toman los cuatro juegos de variables para generar cuatro nuevos **Dataset Muestra** y resultan con los siguientes tamaños:  
+>
+>- 1. Dataset Enunciado: **`r ncol(data1_original)`** variables  
+>- 2. Dataset Ejemplo PDF: **`r ncol(data1_pdf)`** variables  
+>- 3. Dataset Teórico: **`r ncol(data1_teorico)`** variables  
+>- 4. Dataset Estadístico: **`r ncol(data1)`** variables  
+
+Procedemos a enfrentar los cuatro conjuntos de Dataset Muestra contra el modelo de entrenamiento **RandomForest**, tomando solo un 10% de las muestras para agilizar los cálculos y comparamos resultados de **Accuracy**  
+
+```{r feature_selection_3, results='hide', cache=TRUE}
 divide <- 0.1  # 10%, toma mínima de muestras para acelerar el cálculo
 
 set.seed(123)
 
-# Crear partición de entrenamiento y prueba para cada dataset
+# Crear partición de entrenamiento y prueba para cada Dataset
 datasets <- list(
   Estadistico = data1,
   Enunciado = data1_original,
@@ -466,12 +512,12 @@ tabla_resultados <- data.frame(
   Tiempo = sapply(resultados, function(res) res$tiempo)
 )
 ```
-```{r 2_1b_feature_selection, cache=TRUE}
+```{r feature_selection_4, cache=TRUE}
 # Imprimir la tabla de resultados
 kable(tabla_resultados, caption = "Comparativa por juego de predictores") %>%
   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 ```
-```{r 2_1c_feature_selection, cache=TRUE, fig.align='center', fig.cap='validando variables', out.width='50%', fig.show='hold', results='hide'}
+```{r feature_selection_5, cache=TRUE, fig.align='center', fig.cap='validando variables', out.width='50%', fig.show='hold', results='hide'}
 # Función para generar el gráfico y mapa de calor para cada modelo
 generar_grafico <- function(result, cm, caption) {
   plot(result$model, main= caption)
@@ -485,11 +531,12 @@ lapply(seq_along(resultados), function(i) generar_grafico(resultados[[i]], resul
 rm(datasets, particion, resultados)
 ```
 
-**Conclusión: nos quedaremos con la propuesta de variables púramente estadística**
+> **Conclusión: nos quedaremos con la propuesta del Dataset con variables escogidas por criterios puramente estadísticos**
 
-### Compararemos ahora el juego de variables escogido en varios modelos de entranamiento para comprobar cual es mas óptimo  
+### Data Visualization:  
+enfrentamos ahora el juego de variables escogido, **'Dataset Muestra Estadístico'**, con varios modelos de entrenamiento para comprobar cual seria mas óptimo para este Dataset  
 
-```{r 2_3_other_model_tests, results='hide', fig.align='center', out.width='50%', fig.show='hold', cache=TRUE}
+```{r other_model_tests_1, results='hide', fig.align='center', out.width='50%', fig.show='hold', fig.cap='validando modelos', cache=TRUE}
 divide <- 0.1  # 10%, toma mínima de muestras para acelerar el cálculo
 
 set.seed(123)
@@ -509,12 +556,11 @@ calculate_accuracy_time <- function(model, training, testing, method_name) {
   title(method_name)
   list(Modelo = method_name, Accuracy = cm_accuracy, Kappa = cm_kappa, Tiempo = elapsed_time)
 }
-
 results <- list()
 
 # Random Forest
 start_time <- Sys.time()
-rf_model <- randomForest(Attack ~ ., data = training, ntree = 100)
+rf_model <- randomForest(Attack ~ ., data = training, ntree = 100)  ##100 mínimo
 plot(rf_model, main="Random Forest")
 results$rf <- calculate_accuracy_time(rf_model, training, testing, "Random Forest")
 
@@ -536,7 +582,7 @@ num_vars = sapply(testing, is.numeric)
 testing_num = testing[, num_vars]
 
 start_time <- Sys.time()
-knn_model <- knn(train = training_num, test = testing[, 1:13], cl = training$Attack, k = 5)
+knn_model <- knn(train = training_num, test = testing[, 1:12], cl = training$Attack, k = 5)
 end_time <- Sys.time()
 elapsed_time <- round((end_time - start_time), 2)
 cm_model <- confusionMatrix(knn_model, testing$Attack)
@@ -552,7 +598,7 @@ start_time <- Sys.time()
 nb_model <- naiveBayes(Attack ~ ., data = training)
 results$nb <- calculate_accuracy_time(nb_model, training, testing, "Naive Bayes")
 ```
-```{r 2_3b_other_model_tests, cache=TRUE}
+```{r other_model_tests_2, cache=TRUE}
 # Resultados
 results_t <- data.frame(Modelo = c(results$rf$Modelo, results$svm$Modelo, results$cart$Modelo,
                                     results$knn$Modelo, results$nb$Modelo),
@@ -567,16 +613,22 @@ kable(results_t, caption = "Resultados por métodos de Clasificación") %>%
   kable_styling(bootstrap_options = "striped", full_width = FALSE)
 ```
 
-### Entrenamiento con el Random Forest y connfiguración Final  
-Se modifica el número de muestras en el dataset de entrenamiento y se busca ajustar parámetros, incluso añadir nuevas variables.
-```{r 2_4_tunning_RF_model_tests, echo=TRUE, cache=TRUE}
+> Como resultado de la comparativa sigue dando mejor resultado el método de **Random Forest**
+
+### Machine Learning and Intrusion Detection:   
+Una vez decidido el entrenamiento con Random Forest y el **'Dataset Muestra Estadístico'**, pasamos a intentar mejorar el ratio de aciertos ajustando algunos parámetros del modelo, para ello incrementamos a un 50% de las muestras para el entrenamiento, ya que se ha visto que tomar mas de este porcentaje no incrementa significativamente el ratio de acierto y empeora mucho el tiempo de cálculo.  
+Posteriormente, intentaremos mejorarlo añadiendo alguna nueva variables.  
+
+```{r tunning_RF_model_tests_1, echo=TRUE, cache=TRUE, message=FALSE}
 rf_trees_fin <- rf_trees #200
 part_fin <- 0.5 
 set.seed(123)
 
-# Añadir columna "Anomaly" al dataset data1
+# Añadir columna "Anomaly" al dataset data1, eliminado ya que desvirtua el modelo de entrenamiento.
 #data1$Anomaly <- ifelse(data1$Attack == "normal.", FALSE, TRUE)
 #data1$Anomaly <- as.factor(data1$Anomaly)
+# Se añade la variable numerica SrcBytes ya que ha detectado que mejora la predicción
+data1$SrcBytes <- data$SrcBytes
 
 data1$Attack <- as.factor(data1$Attack)
 
@@ -584,8 +636,6 @@ data1$Attack <- as.factor(data1$Attack)
 inTrain_fin <- createDataPartition(y=data1$Attack, p=part_fin, list=FALSE)
 training_fin <- data1[inTrain_fin,]
 testing_fin <- data1[-inTrain_fin,]
-prop.table(table(training_fin$Attack))
-prop.table(table(testing_fin$Attack))
 
 # Entrenar el modelo de Random Forest
 control <- rfeControl(functions=rfFuncs, method="cv", number=10)
@@ -602,7 +652,7 @@ rf_fin_pred <- predict(rf_fin_model, testing_fin)
 
 cm_fin <- confusionMatrix(rf_fin_pred, testing_fin$Attack)
 
-predictors(rf_fin_model)
+#predictors(rf_fin_model) variables
 plot(rf_fin_model)
 heatmap(cm_fin$table)
 
@@ -610,9 +660,16 @@ resultado_final <- data.frame( Accuracy= as.numeric(round(cm_fin$overall[1], 4)*
                                Kappa= as.numeric(round(cm_fin$overall[2], 4)*100),
                                Tiempo= as.numeric(elapsed_time_fin))
 
-knitr::kable(resultado_final, caption = "Resultado por de Clasificación por RandomForest") %>%
-    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
+kable(resultado_final, caption = "Resultado para Clasificación por RandomForest") %>%
+    kable_styling(bootstrap_options = c("striped"), full_width = F)
+```
 
+> Finalmente Se obtiene una precisión del **`r resultado_final$Accuracy`** equilibrando variables para optimizar ahorro de capacidad de cálculo.
+
+### Model Evaluation: 
+Se ejecuta ahora el cálculo de las métricas finales y se crea tabla resumen con la precisión obtenida por cada tipo de **'Attack'**:  
+
+```{r tunning_RF_model_tests_2, echo=TRUE, cache=TRUE}
 # Crear una nueva columna "match" en la tabla valid
 valid <- testing_fin %>%
   mutate(Attack = as.character(Attack),
@@ -642,42 +699,56 @@ tabla_fin <- tabla_fin %>%
   arrange(desc(Accuracy), desc(Aciertos))
 
 # Mostrar la tabla tabla_fin actualizada
-knitr::kable(tabla_fin, caption = "Resultado por tipo de Attack") %>%
-    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
+kable(tabla_fin, caption = "Resultado por tipo de Attack") %>%
+    kable_styling(bootstrap_options = c("striped"), full_width = F)
 ```
 
-# EDA: Esta sección es para completar el estudio de los datos y sus relaciones
+# Mejora del EDA: 
 
-Categorias principales de intrusiones:
+Esta sección serviría para completar el estudio de los datos y sus relaciones, con el objetivo de seguir iterando en encontrar nuevos conjuntos de variables que perfeccionen el modelo de entrenamiento y se consiga un mejor ratio de aciertos
 
-DOS: denial-of-service, e.g. syn flood;
-R2L: unauthorized access from a remote machine, e.g. guessing password;
-U2R: unauthorized access to local superuser (root) privileges, e.g., various ``buffer overflow'' attacks;
-probing: surveillance and other probing, e.g., port scanning.
+_Nota: por falta de tiempo se anotaran solo algunos trabajos exploratorios realizados hasta el momento de la entrega con objeto de abordarlos en un futuro_
 
-#### Observación: DstHostSameSrcPortRate tiene un ligero efecto en el tipo de intrusión, para "DstHostSameSrcPortRate" mayor a igual a 1 puede ser "probe" de "r2l"
-```{r 3_1_eda1, echo=TRUE, cache=TRUE}
+## Teniendo en cuenta las Categorias principales de intrusiones:   
+
+-**DoS:** ataque de denegación de servicio, e.g.'syn flood'  
+-**R2L:** ataque de acceso remoto, e.g. 'guessing password'  
+-**U2R:** ataque de escalado a privilegios de Usuario local (root), e.g., `buffer overflow'  
+-**probing:** ataque de sondeo, e.g., 'port scanning'  
+
+## Teniendo en cuenta las variables cualitativas y su significado:   
+- **Protocol_type:** El tipo de protocolo utilizado en una conexión puede ayudar a distinguir entre diferentes tipos de ataques. Por ejemplo, ciertos tipos de ataques pueden estar más asociados con protocolos específicos.
+- **Service:** El servicio de red al que se accede en una conexión puede proporcionar información sobre la naturaleza de la actividad. Algunos servicios pueden ser más susceptibles a ciertos tipos de ataques.
+- **Flag:** El estado de la conexión puede indicar comportamientos anómalos, como conexiones establecidas inusualmente largas o múltiples intentos de restablecimiento de conexiones.
+- **Duración:** La duración de una conexión puede ser un indicador de ataques prolongados o sesiones anómalas que podrían requerir una mayor atención.
+- **Bytes transferidos:** La cantidad de bytes transferidos en una conexión puede ayudar a identificar ataques de inundación o de denegación de servicio, donde hay un flujo inusualmente alto de datos.
+
+## Teniendo en cuenta las relación posible entre las variables y las categorias de intrusión:   
+
+Observación: **'DstHostSameSrcPortRate'** tiene un ligero efecto en el tipo de intrusión, para "DstHostSameSrcPortRate" mayor a igual a 1 puede ser un "probe" de "R2L"  
+```{r eda_1, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(DstHostSameSrvRate,DstHostSrvCount,colour=Attack,data=data)
 ```
-#### Plot mean attack duration and median attack duration.
-```{r, cache=TRUE}
-ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$Attack)) + 
+
+Gráfica de la **media** de la duración del ataque y su **mediana**  
+```{r eda_2, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+ggplot(data=data, aes(x=data$Attack, y=Duration, fill = Attack)) + 
   geom_bar(stat = "summary", fun.y = "mean")+scale_x_discrete(name = "Attack")+
   scale_y_continuous("Duration")+labs(title="Mean attack duration", fill=("Attack\n") )
 
 #median attack duraction
-ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$Attack)) + 
+ggplot(data=data, aes(x=Attack, y=Duration, fill = Attack)) + 
   geom_bar(stat = "summary", fun.y = "median")+scale_x_discrete(name = "Attack")+
   scale_y_continuous("Duration")+labs(title="Median attack duration", fill=("Attack\n") )
 ```
-The graphs show that the average durations reflect the type of attack. 
-In fact, a DoS attack has an average duration of zero since its goal is to make a physical device in the network unusable. In this way, the service does down and the average duration is almost zero.
-Note that, a Probing attack, which should get as much information as possible about network security, has a large average duration.
-While, only the User to Root attack (u2r) has a very high median. In fact, the durations of this attack are comparable to each other, while this does not happen for other types of attacks that have very variable duration between them.
 
-#### Plot average duration of attacks based on the type of protocol.
-```{r, cache=TRUE}
-ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$ProtocolType)) + 
+Los gráficos muestran que las duraciones promedio reflejan el tipo de ataque. De hecho, un ataque de denegación de servicio (DoS) tiene una duración promedio de cero, ya que su objetivo es dejar inutilizable un dispositivo físico en la red. De esta manera, el servicio se interrumpe y la duración promedio es casi cero.  
+Es importante tener en cuenta que un ataque de sondeo (probe), que busca obtener la mayor cantidad de información posible sobre la seguridad de la red, tiene una duración promedio más larga.  
+Por otro lado, solo el ataque de Usuario a Raíz (U2R) tiene una mediana muy alta. De hecho, las duraciones de este ataque son comparables entre sí, mientras que esto no sucede en otros tipos de ataques que tienen duraciones muy variables entre ellos.  
+
+- Gráfica de la media de la duración del ataque basado en el **tipo de protocolo.**   
+```{r eda_3, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+ggplot(data=data, aes(x=Attack, y=Duration, fill = ProtocolType)) + 
   geom_bar(stat = "summary", fun.y = "mean")+scale_x_discrete(name = "Attack")+
   scale_y_continuous("Duration")+ scale_fill_discrete(name = "Protocol type\n")+
   labs(title="Average duration of attacks based on the type of protocol" )
@@ -685,74 +756,81 @@ ggplot(data=data, aes(x=data$Attack, y=data$Duration, fill = data$ProtocolType))
 
 Como se puede observar en el gráfico, los tipos de ataques reflejan la duración promedio basada en el tipo de protocolo. De hecho, muchos ataques utilizan el protocolo TCP que se utiliza ampliamente para implementar diferentes servicios. El uso extensivo del protocolo UDP en casos normales es extraño, pero depende del tipo de solicitudes de servicio del usuario.
 
-Observaciones individuales usando 'Duration', 'Attack' y 'protocol type'.
-```{r, cache=TRUE}
-p1 <- ggplot(data,aes(y = data$Duration, x = data$Attack)) +
+-Observaciones individuales usando **Duration**, **Attack** y **ProtocolType**.  
+```{r  eda_4, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
+p1 <- ggplot(data,aes(y = Duration, x = Attack)) +
   geom_point()
-p1 +  geom_point(aes(color=data$ProtocolType))+
-  labs(title="Duraction, attack and protocol type" , color ="Protocol type")+
+p1 +  geom_point(aes(color=ProtocolType))+
+  labs(title="Duration, attack and protocol type" , color ="Protocol type")+
   scale_x_discrete(name = "Attack")+
   scale_y_discrete("Duration")
 ```
 
-#### Observatión: "Flag" es un buen predictor. Flag= "REG" y "S0" es tipo "DoS"
-```{r eda2, echo=TRUE, cache=TRUE}
+- Observación sobre como **"Flag"** es un buen predictor. Flag= "REG" y "S0" es tipo "DoS"  
+```{r eda5, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(Service,Flag,colour=Attack,data=data)
 ```
 
-#### Observación: Para duración mayor hay de 30000 se puede ver un 'probe', la duración misma es un fuerte predictor
-```{r eda3, echo=TRUE, cache=TRUE}
+- Observación sobre como para **'Duration'** mayor de 30.000 se puede ver un **'probe'**, la duración misma ya es un fuerte predictor  
+```{r eda6, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
-#### Observación: Para duración mayor 30000 puede ser un 'probe'
- Observación: ProtocolType "tcp" tiene "DOS" tipo de intrusion. Es un fuerte predictor del tipo "DoS".
-```{r eda4, echo=TRUE, cache=TRUE}
+- Observación sobre como **ProtocolType="tcp"** tiene "DoS" un fuerte predictor del tipo **"DoS"**.  
+```{r eda7, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(Service,ProtocolType,colour=Attack,data=data)
 ```
 
-#### Observación: No hay una clara identificación
-```{r eda5, echo=TRUE, cache=TRUE}
+- Observación NO hay una clara identificación con **'Flag'**  
+```{r eda8, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(Flag,Land,colour=Attack,data=data)
 ```
 
-#### Observación: Para SerrorRate y SrvSerrorRate=0 or 1 es tipo "Dos" y SerrorRate entre 0.25 a 0.5 es un "probe""
-```{r eda6, echo=TRUE, cache=TRUE}
+- Observación: **'SerrorRate'** y **'SrvSerrorRate'**=0 or 1 es tipo **"Dos"** y 'SerrorRate' entre 0.25 a 0.5 es un "probe"  
+```{r eda9, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(SerrorRate,SrvSerrorRate,colour=Attack,data=data)
 ```
 
-#### Observación: para duración mayor de 30000 puede ser un 'probe'
-```{r eda7, echo=TRUE, cache=TRUE}
+- Observación: con **'SrcBytes'** para duración mayor de 30000 puede ser un 'probe'  
+```{r eda10, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE}
 qplot(Duration,SrcBytes,colour=Attack,data=data)
 ```
 
-#### Resultado: claramente Flag is un potente predictor para incrusiones de tipo "DoS"
-```{r eda8, echo=TRUE, cache=TRUE}
-A=table(data$Flag,data$Attack)
-round(prop.table(A)*100,1)
+- Resultado: claramente **'Flag'** is un potente predictor para incursiones de tipo **"DoS"**  
+```{r eda11, echo=TRUE, cache=TRUE, message=FALSE, warning=FALSE, results='hide'}
+A <- table(data$Flag,data$Attack)
+#round(prop.table(A)*100,1)
+kable(A, caption = "Resultado por tipo de Flag") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
 ```
+`r round(prop.table(A)*100,1)`
 
-#### Enriquecemos el Dataset con: las tácticas de ATT&CK y las variables relacionadas con su ID según estándard MITRE y el ID de CWE
-```{r 3_2_add_standard, cache=TRUE}
+## Enriquecimiento del **Dataset Muestra'**:  
+
+A nivel de ejemplo, se podría mejorar el Dataset ya una vez entrenado el modelo, añadiendo la correspondencia de la variable **'Attack'** con las tácticas del estándard de Mitre ATT&CK y poblar el Dataset con las variables relacionadas con su ID y el ID CWE de la debilidad expuesta, añadiendo más valor al receptor de la información o alerta.  
+
+La clasificación ha sido obtenida de fuentes de búsqueda como Google y ChatGPT 3, en algunos tipos no se ha podido identificar claramente etiquetándolos como **'NotFound'**, estos casos podrían intentarse acabar de identificar usando el ejemplo visto en clase con Node4J, o con bibliotecas mas especializadas. _Se emplaza para futuras ampliaciones de la práctica_
+
+```{r add_standard, cache=TRUE, message=FALSE}
 #### 1. carga limpio el Dataset
-data <- read.csv("Book2.csv",header=T)
+#data <- read.csv("Book2.csv",header=T)
 data_r <- data
 
 #### 2. me quedo solo con las variables numéricas en nuevo data_r
-numeric_cols <- sapply(data_r, is.numeric)
-data_r <- data_r[, numeric_cols == TRUE] 
+#numeric_cols <- sapply(data_r, is.numeric)
+#data_r <- data_r[, numeric_cols == TRUE] 
 # elimino variables con Varianza zero y nzv, #eliminará la variable NumOutboundCmds
-variance <- nearZeroVar(data_r, saveMetrics = T)
-data_r <- data_r[, !(variance$zeroVar | variance$nzv)]
+#variance <- nearZeroVar(data_r, saveMetrics = T)
+#data_r <- data_r[, !(variance$zeroVar | variance$nzv)]
 # Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
-data_r$SrcBytes <- data$SrcBytes
+#data_r$SrcBytes <- data$SrcBytes
 
 #### 3. columna con alta correlación entre ellas, se pueden eliminar
-columns_to_remove <- c("DstHostSameSrvRate", "DstHostSrvRerrorRate", "DstHostRerrorRate", "RerrorRate", "DstHostSrvSerrorRate", "DstHostSerrorRate", "SrvSerrorRate")
-data_r <- data_r[, setdiff(names(data_r), columns_to_remove)]
+#columns_to_remove <- c("DstHostSameSrvRate", "DstHostSrvRerrorRate", "DstHostRerrorRate", "RerrorRate", "DstHostSrvSerrorRate", "DstHostSerrorRate", "SrvSerrorRate")
+#data_r <- data_r[, setdiff(names(data_r), columns_to_remove)]
 
 #### 4. Se añade la variable numerica SrcBytes ya que detectado mejora la predicción
-data_r$SrcBytes <- data$SrcBytes
+#data_r$SrcBytes <- data$SrcBytes
 data_r$Attack <- as.factor(data$Attack)
 
 #### 5. Definir las tácticas de ATT&CK y las variables relacionadas con su ID según estándard MITRE y CWE
@@ -795,8 +873,6 @@ data_r$Tactica <- as.character(data_r$Tactica)
 data_r$ID_Tactic <- as.character(data_r$ID_Tactic)
 data_r$ID_CWE <- as.character(data_r$ID_CWE)
 data_r$Attack <- as.factor(data_r$Attack)
-#glimpse(data)
-#any(!complete.cases(data))
 
 # Mostrar los valores de Attack que no han podido ser clasificados
 unclassified_attacks <- data_r$Attack[data_r$Tactica == "Unknown"]
@@ -827,27 +903,25 @@ ggplot(data_r, aes(x = Tactica, y = Attack, fill = Tactica)) +
   guides(fill = guide_legend(title = "Táctica ATT&CK")) +
   scale_fill_brewer(palette = "Set3")
 
+# Crear la tabla con los resultados de la clasificación y agrupar por Táctica
+tabla_relacion <- data_r %>%
+  group_by(Tactica) %>%
+  summarise(ID_Tactic = unique(ID_Tactic),
+            ID_CWE = unique(ID_CWE))
 
-#### ver si vale la pena incluir estos gráficos
-library(DataExplorer)
-data_list <- data
-plot_str(data_list)
+# Mostrar la tabla
+kable(tabla_relacion, caption = "Resulación Táctica con IDs y CWE") %>%
+    kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
 ```
 
-
-#### Fase de testeo de la eficacia de las nuevas variables.
-
-```{r 2_6_tunning_RF_model_group_tests, eval=FALSE, cache=TRUE}
+#### Testeo de la eficacia de las nuevas variables.  {-}
+_se dispone del código pero no se evalua_
+```{r add_tunning_RF_model_group_tests, eval=FALSE, cache=TRUE}
 rf_trees_fin <- rf_trees #200
 part_fin <- 0.5 
 set.seed(123)
 
 data_r$Tactica <- as.factor(data_r$Tactica)
-
-# Añadir columna "Anomaly" al dataset data1
-#data_r$Anomaly <- ifelse(data_r$Attack == "normal.", FALSE, TRUE)
-#data_r$Anomaly <- as.factor(data_r$Anomaly)
-#data_r$Attack <- as.factor(data_r$Attack)
 
 # Prepara la división entre training y testing
 inTrain_fin <- createDataPartition(y=data_r$Tactica, p=part_fin, list=FALSE)
@@ -913,11 +987,10 @@ tabla_fin <- tabla_fin %>%
   arrange(desc(Accuracy), desc(Aciertos))
 
 # Mostrar la tabla tabla_fin actualizada
-knitr::kable(tabla_fin, caption = "Resultado por tipo de Attack") %>%
+kable(tabla_fin, caption = "Resultado por tipo de Attack") %>%
     kable_styling(bootstrap_options = c("striped", "condensed"), full_width = F)
-
 ```
-# Appendix: Todo el código fuente para este informe
+# Appendix: Todo el código fuente usado para este informe
 
 ```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE, class.source = 'fold-show'}
 ```
